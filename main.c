@@ -24,6 +24,7 @@
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <wlr/util/log.h>
+#include <cyaml/cyaml.h>
 #include "pool.h"
 #include "cursor-shape-v1-client-protocol.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
@@ -1139,63 +1140,49 @@ nag_run(struct nag *nag)
 	}
 }
 
+struct yaml_conf {
+	char *panel_items;
+};
+
+static const cyaml_schema_field_t yaml_conf_fields[] = {
+	CYAML_FIELD_STRING_PTR("panel_items", CYAML_FLAG_OPTIONAL,
+		struct yaml_conf, panel_items, 0, CYAML_UNLIMITED),
+	CYAML_FIELD_END
+};
+
+static const cyaml_schema_value_t yaml_conf_schema = {
+	CYAML_VALUE_MAPPING(CYAML_FLAG_POINTER, struct yaml_conf, yaml_conf_fields),
+};
+
+static const cyaml_config_t yaml_cyaml_config = {
+	.log_fn = cyaml_log,
+	.mem_fn = cyaml_mem,
+	.log_level = CYAML_LOG_WARNING,
+	.flags = CYAML_CFG_IGNORE_UNKNOWN_KEYS,
+};
+
 static void
 load_config(struct conf *conf, const char *path)
 {
-	FILE *f = fopen(path, "r");
-	if (!f) {
+	struct yaml_conf *data = NULL;
+	cyaml_err_t err = cyaml_load_file(path, &yaml_cyaml_config,
+		&yaml_conf_schema, (cyaml_data_t **)&data, NULL);
+	if (err == CYAML_ERR_FILE_OPEN) {
 		return;
 	}
-	char line[256];
-	while (fgets(line, sizeof(line), f)) {
-		/* Strip newline */
-		char *nl = strchr(line, '\n');
-		if (nl) {
-			*nl = '\0';
-		}
-		/* Skip comments and empty lines */
-		char *p = line;
-		while (*p == ' ' || *p == '\t') {
-			p++;
-		}
-		if (*p == '#' || *p == '\0') {
-			continue;
-		}
-		/* Parse "key: value" */
-		char *colon = strchr(p, ':');
-		if (!colon) {
-			continue;
-		}
-		*colon = '\0';
-		char *key = p;
-		char *value = colon + 1;
-		/* Trim trailing whitespace from key */
-		if (*key) {
-			char *end = key + strlen(key) - 1;
-			while (end >= key && (*end == ' ' || *end == '\t')) {
-				*end-- = '\0';
-			}
-		}
-		/* Trim leading whitespace from value */
-		while (*value == ' ' || *value == '\t') {
-			value++;
-		}
-		/* Trim trailing whitespace from value */
-		if (*value) {
-			char *end = value + strlen(value) - 1;
-			while (end >= value && (*end == ' ' || *end == '\t')) {
-				*end-- = '\0';
-			}
-		}
-		if (strcmp(key, "panel_items") == 0) {
-			char *tmp = strdup(value);
-			if (tmp) {
-				free(conf->panel_items);
-				conf->panel_items = tmp;
-			}
-		}
+	if (err != CYAML_OK) {
+		wlr_log(WLR_ERROR, "Failed to load config '%s': %s",
+			path, cyaml_strerror(err));
+		return;
 	}
-	fclose(f);
+	if (data) {
+		if (data->panel_items) {
+			free(conf->panel_items);
+			conf->panel_items = data->panel_items;
+			data->panel_items = NULL;
+		}
+		cyaml_free(&yaml_cyaml_config, &yaml_conf_schema, data, 0);
+	}
 }
 
 static void
