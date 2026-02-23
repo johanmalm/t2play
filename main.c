@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <getopt.h>
 #include <glib.h>
+#include <limits.h>
 #include <pango/pangocairo.h>
 #include <poll.h>
 #include <stdio.h>
@@ -39,6 +40,9 @@ struct conf {
 	uint32_t text;
 	uint32_t button_background;
 	uint32_t button_active;
+
+	/* Panel layout: string of item codes, e.g. "TC" (T=Taskbar, C=Clock) */
+	char *panel_items;
 };
 
 struct nag;
@@ -89,6 +93,7 @@ enum {
 	FD_WAYLAND,
 	FD_TIMER,
 	FD_SIGNAL,
+	FD_CLOCK,
 
 	NR_FDS,
 };
@@ -278,13 +283,41 @@ render_taskbar(cairo_t *cairo, struct nag *nag)
 }
 
 static void
+render_clock(cairo_t *cairo, struct nag *nag)
+{
+	time_t t = time(NULL);
+	struct tm *tm_info = localtime(&t);
+	char buf[6]; /* "HH:MM\0" */
+	strftime(buf, sizeof(buf), "%H:%M", tm_info);
+
+	int text_width, text_height;
+	get_text_size(cairo, nag->conf->font_description,
+		&text_width, &text_height, NULL, 1, false, "%s", buf);
+
+	int x = nag->width - text_width - BUTTON_PADDING;
+	cairo_set_source_u32(cairo, nag->conf->text);
+	cairo_move_to(cairo, x, (nag->height - text_height) / 2.0);
+	render_text(cairo, nag->conf->font_description, 1, false, "%s", buf);
+}
+
+static void
 render_to_cairo(cairo_t *cairo, struct nag *nag)
 {
 	cairo_set_operator(cairo, CAIRO_OPERATOR_SOURCE);
 	cairo_set_source_u32(cairo, nag->conf->background);
 	cairo_paint(cairo);
 
-	render_taskbar(cairo, nag);
+	if (nag->conf->panel_items) {
+		for (const char *p = nag->conf->panel_items; *p; p++) {
+			if (*p == 'T') {
+				render_taskbar(cairo, nag);
+			} else if (*p == 'C') {
+				render_clock(cairo, nag);
+			} else {
+				wlr_log(WLR_ERROR, "Unknown panel_items code '%c'", *p);
+			}
+		}
+	}
 
 	cairo_set_source_u32(cairo, nag->conf->text);
 	cairo_rectangle(cairo, 0, nag->height, nag->width, 1);
@@ -489,6 +522,8 @@ nag_destroy(struct nag *nag)
 	nag->run_display = false;
 
 	pango_font_description_free(nag->conf->font_description);
+	free(nag->conf->panel_items);
+	nag->conf->panel_items = NULL;
 
 	if (nag->layer_surface) {
 		zwlr_layer_surface_v1_destroy(nag->layer_surface);
@@ -549,6 +584,7 @@ nag_destroy(struct nag *nag)
 
 	close_pollfd(&nag->pollfds[FD_TIMER]);
 	close_pollfd(&nag->pollfds[FD_SIGNAL]);
+	close_pollfd(&nag->pollfds[FD_CLOCK]);
 }
 
 static void
@@ -1022,6 +1058,22 @@ nag_setup(struct nag *nag)
 		nag->pollfds[FD_TIMER].fd = -1;
 	}
 
+	if (nag->conf->panel_items && strchr(nag->conf->panel_items, 'C')) {
+		nag->pollfds[FD_CLOCK].fd = timerfd_create(CLOCK_REALTIME, TFD_CLOEXEC);
+		nag->pollfds[FD_CLOCK].events = POLLIN;
+		/* Fire at the start of the next minute, then every 60 seconds */
+		struct timespec now;
+		clock_gettime(CLOCK_REALTIME, &now);
+		struct itimerspec clock_timer = {
+			.it_interval.tv_sec = 60,
+			.it_value.tv_sec = now.tv_sec - (now.tv_sec % 60) + 60,
+		};
+		timerfd_settime(nag->pollfds[FD_CLOCK].fd,
+			TFD_TIMER_ABSTIME, &clock_timer, NULL);
+	} else {
+		nag->pollfds[FD_CLOCK].fd = -1;
+	}
+
 	sigset_t mask;
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGTERM);
@@ -1079,7 +1131,71 @@ nag_run(struct nag *nag)
 		if (nag->pollfds[FD_SIGNAL].revents & POLLIN) {
 			break;
 		}
+		if (nag->pollfds[FD_CLOCK].revents & POLLIN) {
+			uint64_t exp;
+			read(nag->pollfds[FD_CLOCK].fd, &exp, sizeof(exp));
+			render_frame(nag);
+		}
 	}
+}
+
+static void
+load_config(struct conf *conf, const char *path)
+{
+	FILE *f = fopen(path, "r");
+	if (!f) {
+		return;
+	}
+	char line[256];
+	while (fgets(line, sizeof(line), f)) {
+		/* Strip newline */
+		char *nl = strchr(line, '\n');
+		if (nl) {
+			*nl = '\0';
+		}
+		/* Skip comments and empty lines */
+		char *p = line;
+		while (*p == ' ' || *p == '\t') {
+			p++;
+		}
+		if (*p == '#' || *p == '\0') {
+			continue;
+		}
+		/* Parse "key: value" */
+		char *colon = strchr(p, ':');
+		if (!colon) {
+			continue;
+		}
+		*colon = '\0';
+		char *key = p;
+		char *value = colon + 1;
+		/* Trim trailing whitespace from key */
+		if (*key) {
+			char *end = key + strlen(key) - 1;
+			while (end >= key && (*end == ' ' || *end == '\t')) {
+				*end-- = '\0';
+			}
+		}
+		/* Trim leading whitespace from value */
+		while (*value == ' ' || *value == '\t') {
+			value++;
+		}
+		/* Trim trailing whitespace from value */
+		if (*value) {
+			char *end = value + strlen(value) - 1;
+			while (end >= value && (*end == ' ' || *end == '\t')) {
+				*end-- = '\0';
+			}
+		}
+		if (strcmp(key, "panel_items") == 0) {
+			char *tmp = strdup(value);
+			if (tmp) {
+				free(conf->panel_items);
+				conf->panel_items = tmp;
+			}
+		}
+	}
+	fclose(f);
 }
 
 static void
@@ -1093,6 +1209,7 @@ conf_init(struct conf *conf)
 	conf->text = 0xFFFFFFFF;
 	conf->button_background = 0x4A4A4AFF;
 	conf->button_active = 0x5A8AC6FF;
+	conf->panel_items = strdup("TC");
 }
 
 int
@@ -1100,6 +1217,31 @@ main(int argc, char **argv)
 {
 	struct conf conf = { 0 };
 	conf_init(&conf);
+
+	/* Load config file from $XDG_CONFIG_HOME/t2play/config.yaml */
+	char config_path[PATH_MAX];
+	const char *xdg_config_home = getenv("XDG_CONFIG_HOME");
+	if (xdg_config_home && *xdg_config_home) {
+		int n = snprintf(config_path, sizeof(config_path),
+			"%s/t2play/config.yaml", xdg_config_home);
+		if (n < 0 || (size_t)n >= sizeof(config_path)) {
+			config_path[0] = '\0';
+		}
+	} else {
+		const char *home = getenv("HOME");
+		if (home) {
+			int n = snprintf(config_path, sizeof(config_path),
+				"%s/.config/t2play/config.yaml", home);
+			if (n < 0 || (size_t)n >= sizeof(config_path)) {
+				config_path[0] = '\0';
+			}
+		} else {
+			config_path[0] = '\0';
+		}
+	}
+	if (config_path[0]) {
+		load_config(&conf, config_path);
+	}
 
 	struct nag nag = {
 		.conf = &conf,
