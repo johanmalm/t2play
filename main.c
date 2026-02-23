@@ -25,6 +25,7 @@
 #include <wlr/util/log.h>
 #include "pool.h"
 #include "cursor-shape-v1-client-protocol.h"
+#include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 
 struct conf {
@@ -36,9 +37,26 @@ struct conf {
 	/* Colors */
 	uint32_t background;
 	uint32_t text;
+	uint32_t button_background;
+	uint32_t button_active;
 };
 
 struct nag;
+
+#define BUTTON_PADDING 8
+#define BUTTON_MAX_WIDTH 200
+
+struct toplevel {
+	struct zwlr_foreign_toplevel_handle_v1 *handle;
+	char *title;
+	char *app_id;
+	bool active;
+	struct nag *nag;
+	/* button geometry for click detection */
+	int btn_x;
+	int btn_width;
+	struct wl_list link; /* nag.toplevels */
+};
 
 struct pointer {
 	struct wl_pointer *pointer;
@@ -89,6 +107,9 @@ struct nag {
 	struct zwlr_layer_surface_v1 *layer_surface;
 	struct wp_cursor_shape_manager_v1 *cursor_shape_manager;
 	struct wl_surface *surface;
+
+	struct zwlr_foreign_toplevel_manager_v1 *toplevel_manager;
+	struct wl_list toplevels; /* struct toplevel.link */
 
 	uint32_t width;
 	uint32_t height;
@@ -212,14 +233,48 @@ cairo_set_source_u32(cairo_t *cairo, uint32_t color)
 }
 
 static void
-render_message(cairo_t *cairo, struct nag *nag)
+render_taskbar(cairo_t *cairo, struct nag *nag)
 {
-	char *msg = nag->message ? : "foo";
-	int text_width, text_height;
-	get_text_size(cairo, nag->conf->font_description, &text_width, &text_height, NULL, 1, true, "%s", msg);
-	cairo_set_source_u32(cairo, nag->conf->text);
-	cairo_move_to(cairo, 4, text_height / 2);
-	render_text(cairo, nag->conf->font_description, 1, false, "%s", msg);
+	int x = BUTTON_PADDING;
+	struct toplevel *toplevel;
+	wl_list_for_each(toplevel, &nag->toplevels, link) {
+		const char *label = toplevel->title ? toplevel->title
+			: (toplevel->app_id ? toplevel->app_id : "?");
+
+		int text_width, text_height;
+		get_text_size(cairo, nag->conf->font_description,
+			&text_width, &text_height, NULL, 1, false, "%s", label);
+
+		int btn_width = text_width + 2 * BUTTON_PADDING;
+		if (btn_width > BUTTON_MAX_WIDTH) {
+			btn_width = BUTTON_MAX_WIDTH;
+		}
+
+		/* Record button geometry for click detection */
+		toplevel->btn_x = x;
+		toplevel->btn_width = btn_width;
+
+		/* Draw button background */
+		if (toplevel->active) {
+			cairo_set_source_u32(cairo, nag->conf->button_active);
+		} else {
+			cairo_set_source_u32(cairo, nag->conf->button_background);
+		}
+		cairo_rectangle(cairo, x, 2, btn_width, nag->height - 4);
+		cairo_fill(cairo);
+
+		/* Draw button label, clipped to button width */
+		cairo_save(cairo);
+		cairo_rectangle(cairo, x + BUTTON_PADDING, 0, btn_width - 2 * BUTTON_PADDING, nag->height);
+		cairo_clip(cairo);
+		cairo_set_source_u32(cairo, nag->conf->text);
+		cairo_move_to(cairo, x + BUTTON_PADDING,
+			(nag->height - text_height) / 2);
+		render_text(cairo, nag->conf->font_description, 1, false, "%s", label);
+		cairo_restore(cairo);
+
+		x += btn_width + BUTTON_PADDING;
+	}
 }
 
 static void
@@ -229,7 +284,7 @@ render_to_cairo(cairo_t *cairo, struct nag *nag)
 	cairo_set_source_u32(cairo, nag->conf->background);
 	cairo_paint(cairo);
 
-	render_message(cairo, nag);
+	render_taskbar(cairo, nag);
 
 	cairo_set_source_u32(cairo, nag->conf->text);
 	cairo_rectangle(cairo, 0, nag->height, nag->width, 1);
@@ -293,6 +348,142 @@ seat_destroy(struct seat *seat)
 }
 
 static void
+toplevel_destroy(struct toplevel *toplevel)
+{
+	zwlr_foreign_toplevel_handle_v1_destroy(toplevel->handle);
+	free(toplevel->title);
+	free(toplevel->app_id);
+	wl_list_remove(&toplevel->link);
+	free(toplevel);
+}
+
+static void
+handle_toplevel_title(void *data,
+		struct zwlr_foreign_toplevel_handle_v1 *handle,
+		const char *title)
+{
+	struct toplevel *toplevel = data;
+	free(toplevel->title);
+	toplevel->title = strdup(title);
+	if (!toplevel->title) {
+		perror("strdup");
+	}
+}
+
+static void
+handle_toplevel_app_id(void *data,
+		struct zwlr_foreign_toplevel_handle_v1 *handle,
+		const char *app_id)
+{
+	struct toplevel *toplevel = data;
+	free(toplevel->app_id);
+	toplevel->app_id = strdup(app_id);
+	if (!toplevel->app_id) {
+		perror("strdup");
+	}
+}
+
+static void
+handle_toplevel_output_enter(void *data,
+		struct zwlr_foreign_toplevel_handle_v1 *handle,
+		struct wl_output *output)
+{
+	/* nop */
+}
+
+static void
+handle_toplevel_output_leave(void *data,
+		struct zwlr_foreign_toplevel_handle_v1 *handle,
+		struct wl_output *output)
+{
+	/* nop */
+}
+
+static void
+handle_toplevel_state(void *data,
+		struct zwlr_foreign_toplevel_handle_v1 *handle,
+		struct wl_array *state)
+{
+	struct toplevel *toplevel = data;
+	toplevel->active = false;
+	uint32_t *entry;
+	wl_array_for_each(entry, state) {
+		if (*entry == ZWLR_FOREIGN_TOPLEVEL_HANDLE_V1_STATE_ACTIVATED) {
+			toplevel->active = true;
+		}
+	}
+}
+
+static void
+handle_toplevel_done(void *data,
+		struct zwlr_foreign_toplevel_handle_v1 *handle)
+{
+	struct toplevel *toplevel = data;
+	render_frame(toplevel->nag);
+}
+
+static void
+handle_toplevel_closed(void *data,
+		struct zwlr_foreign_toplevel_handle_v1 *handle)
+{
+	struct toplevel *toplevel = data;
+	struct nag *nag = toplevel->nag;
+	toplevel_destroy(toplevel);
+	render_frame(nag);
+}
+
+static void
+handle_toplevel_parent(void *data,
+		struct zwlr_foreign_toplevel_handle_v1 *handle,
+		struct zwlr_foreign_toplevel_handle_v1 *parent)
+{
+	/* nop */
+}
+
+static const struct zwlr_foreign_toplevel_handle_v1_listener toplevel_handle_listener = {
+	.title = handle_toplevel_title,
+	.app_id = handle_toplevel_app_id,
+	.output_enter = handle_toplevel_output_enter,
+	.output_leave = handle_toplevel_output_leave,
+	.state = handle_toplevel_state,
+	.done = handle_toplevel_done,
+	.closed = handle_toplevel_closed,
+	.parent = handle_toplevel_parent,
+};
+
+static void
+handle_toplevel_manager_toplevel(void *data,
+		struct zwlr_foreign_toplevel_manager_v1 *manager,
+		struct zwlr_foreign_toplevel_handle_v1 *handle)
+{
+	struct nag *nag = data;
+	struct toplevel *toplevel = calloc(1, sizeof(*toplevel));
+	if (!toplevel) {
+		perror("calloc");
+		return;
+	}
+	toplevel->handle = handle;
+	toplevel->nag = nag;
+	wl_list_insert(nag->toplevels.prev, &toplevel->link);
+	zwlr_foreign_toplevel_handle_v1_add_listener(handle,
+		&toplevel_handle_listener, toplevel);
+}
+
+static void
+handle_toplevel_manager_finished(void *data,
+		struct zwlr_foreign_toplevel_manager_v1 *manager)
+{
+	struct nag *nag = data;
+	zwlr_foreign_toplevel_manager_v1_destroy(nag->toplevel_manager);
+	nag->toplevel_manager = NULL;
+}
+
+static const struct zwlr_foreign_toplevel_manager_v1_listener toplevel_manager_listener = {
+	.toplevel = handle_toplevel_manager_toplevel,
+	.finished = handle_toplevel_manager_finished,
+};
+
+static void
 nag_destroy(struct nag *nag)
 {
 	nag->run_display = false;
@@ -318,6 +509,16 @@ nag_destroy(struct nag *nag)
 	struct seat *seat, *tmpseat;
 	wl_list_for_each_safe(seat, tmpseat, &nag->seats, link) {
 		seat_destroy(seat);
+	}
+
+	struct toplevel *toplevel, *tmptoplevel;
+	wl_list_for_each_safe(toplevel, tmptoplevel, &nag->toplevels, link) {
+		toplevel_destroy(toplevel);
+	}
+
+	if (nag->toplevel_manager) {
+		zwlr_foreign_toplevel_manager_v1_destroy(nag->toplevel_manager);
+		nag->toplevel_manager = NULL;
 	}
 
 	destroy_buffer(&nag->buffers[0]);
@@ -508,10 +709,16 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 		return;
 	}
 
-	double x = seat->pointer.x;
-	double y = seat->pointer.y;
+	int x = seat->pointer.x;
 
-	// Do something here
+	struct toplevel *toplevel;
+	wl_list_for_each(toplevel, &nag->toplevels, link) {
+		if (x >= toplevel->btn_x && x < toplevel->btn_x + toplevel->btn_width) {
+			zwlr_foreign_toplevel_handle_v1_activate(
+				toplevel->handle, seat->wl_seat);
+			break;
+		}
+	}
 }
 
 static void
@@ -700,6 +907,13 @@ handle_global(void *data, struct wl_registry *registry, uint32_t name,
 	} else if (strcmp(interface, wp_cursor_shape_manager_v1_interface.name) == 0) {
 		nag->cursor_shape_manager = wl_registry_bind(
 				registry, name, &wp_cursor_shape_manager_v1_interface, 1);
+	} else if (strcmp(interface,
+			zwlr_foreign_toplevel_manager_v1_interface.name) == 0) {
+		nag->toplevel_manager = wl_registry_bind(registry, name,
+				&zwlr_foreign_toplevel_manager_v1_interface, 3);
+		zwlr_foreign_toplevel_manager_v1_add_listener(
+				nag->toplevel_manager,
+				&toplevel_manager_listener, nag);
 	}
 }
 
@@ -877,6 +1091,8 @@ conf_init(struct conf *conf)
 	conf->layer = ZWLR_LAYER_SHELL_V1_LAYER_TOP;
 	conf->background = 0x323232FF;
 	conf->text = 0xFFFFFFFF;
+	conf->button_background = 0x4A4A4AFF;
+	conf->button_active = 0x5A8AC6FF;
 }
 
 int
@@ -891,6 +1107,7 @@ main(int argc, char **argv)
 
 	wl_list_init(&nag.outputs);
 	wl_list_init(&nag.seats);
+	wl_list_init(&nag.toplevels);
 
 	wlr_log_init(WLR_DEBUG, NULL);
 
