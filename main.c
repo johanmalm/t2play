@@ -1076,6 +1076,7 @@ nag_setup(struct nag *nag)
 	}
 
 	sigset_t mask;
+	sigemptyset(&mask);
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGTERM);
 	sigprocmask(SIG_BLOCK, &mask, NULL);
