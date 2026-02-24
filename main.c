@@ -57,10 +57,14 @@ struct toplevel {
 	char *app_id;
 	bool active;
 	struct nag *nag;
-	/* button geometry for click detection */
-	int btn_x;
-	int btn_width;
 	struct wl_list link; /* nag.toplevels */
+};
+
+struct widget {
+	int x;
+	int width;
+	struct toplevel *toplevel; /* NULL if not a taskbar button */
+	struct wl_list link; /* nag.widgets */
 };
 
 struct pointer {
@@ -116,6 +120,7 @@ struct nag {
 
 	struct zwlr_foreign_toplevel_manager_v1 *toplevel_manager;
 	struct wl_list toplevels; /* struct toplevel.link */
+	struct wl_list widgets; /* struct widget.link */
 
 	uint32_t width;
 	uint32_t height;
@@ -239,9 +244,65 @@ cairo_set_source_u32(cairo_t *cairo, uint32_t color)
 }
 
 static void
-render_taskbar(cairo_t *cairo, struct nag *nag)
+widgets_free(struct nag *nag)
 {
-	int x = BUTTON_PADDING;
+	struct widget *widget, *tmp;
+	wl_list_for_each_safe(widget, tmp, &nag->widgets, link) {
+		wl_list_remove(&widget->link);
+		free(widget);
+	}
+}
+
+static void
+widget_add(struct nag *nag, int x, int width, struct toplevel *toplevel)
+{
+	struct widget *widget = calloc(1, sizeof(*widget));
+	if (!widget) {
+		wlr_log(WLR_ERROR, "Failed to allocate widget");
+		return;
+	}
+	widget->x = x;
+	widget->width = width;
+	widget->toplevel = toplevel;
+	wl_list_insert(nag->widgets.prev, &widget->link);
+}
+
+static int
+taskbar_natural_width(cairo_t *cairo, struct nag *nag)
+{
+	int total = BUTTON_PADDING;
+	struct toplevel *toplevel;
+	wl_list_for_each(toplevel, &nag->toplevels, link) {
+		const char *label = toplevel->title ? toplevel->title
+			: (toplevel->app_id ? toplevel->app_id : "?");
+		int text_width, text_height;
+		get_text_size(cairo, nag->conf->font_description,
+			&text_width, &text_height, NULL, 1, false, "%s", label);
+		int btn_width = text_width + 2 * BUTTON_PADDING;
+		if (btn_width > BUTTON_MAX_WIDTH) {
+			btn_width = BUTTON_MAX_WIDTH;
+		}
+		total += btn_width + BUTTON_PADDING;
+	}
+	return total;
+}
+
+static int
+clock_natural_width(cairo_t *cairo, struct nag *nag)
+{
+	char buf[6]; /* "HH:MM\0" */
+	time_t t = time(NULL);
+	strftime(buf, sizeof(buf), "%H:%M", localtime(&t));
+	int text_width, text_height;
+	get_text_size(cairo, nag->conf->font_description,
+		&text_width, &text_height, NULL, 1, false, "%s", buf);
+	return text_width + 2 * BUTTON_PADDING;
+}
+
+static int
+render_taskbar(cairo_t *cairo, struct nag *nag, int start_x)
+{
+	int x = start_x + BUTTON_PADDING;
 	struct toplevel *toplevel;
 	wl_list_for_each(toplevel, &nag->toplevels, link) {
 		const char *label = toplevel->title ? toplevel->title
@@ -256,9 +317,7 @@ render_taskbar(cairo_t *cairo, struct nag *nag)
 			btn_width = BUTTON_MAX_WIDTH;
 		}
 
-		/* Record button geometry for click detection */
-		toplevel->btn_x = x;
-		toplevel->btn_width = btn_width;
+		widget_add(nag, x, btn_width, toplevel);
 
 		/* Draw button background */
 		if (toplevel->active) {
@@ -281,10 +340,11 @@ render_taskbar(cairo_t *cairo, struct nag *nag)
 
 		x += btn_width + BUTTON_PADDING;
 	}
+	return x - start_x;
 }
 
-static void
-render_clock(cairo_t *cairo, struct nag *nag)
+static int
+render_clock(cairo_t *cairo, struct nag *nag, int start_x)
 {
 	time_t t = time(NULL);
 	struct tm *tm_info = localtime(&t);
@@ -295,10 +355,13 @@ render_clock(cairo_t *cairo, struct nag *nag)
 	get_text_size(cairo, nag->conf->font_description,
 		&text_width, &text_height, NULL, 1, false, "%s", buf);
 
-	int x = nag->width - text_width - BUTTON_PADDING;
+	int width = text_width + 2 * BUTTON_PADDING;
+	widget_add(nag, start_x, width, NULL);
+
 	cairo_set_source_u32(cairo, nag->conf->text);
-	cairo_move_to(cairo, x, (nag->height - text_height) / 2.0);
+	cairo_move_to(cairo, start_x + BUTTON_PADDING, (nag->height - text_height) / 2.0);
 	render_text(cairo, nag->conf->font_description, 1, false, "%s", buf);
+	return width;
 }
 
 static void
@@ -308,12 +371,34 @@ render_to_cairo(cairo_t *cairo, struct nag *nag)
 	cairo_set_source_u32(cairo, nag->conf->background);
 	cairo_paint(cairo);
 
+	widgets_free(nag);
+
 	if (nag->conf->panel_items) {
+		/* Compute spacer width if 'S' is present */
+		int spacer_width = 0;
+		if (strchr(nag->conf->panel_items, 'S')) {
+			int fixed_width = 0;
+			for (const char *p = nag->conf->panel_items; *p; p++) {
+				if (*p == 'T') {
+					fixed_width += taskbar_natural_width(cairo, nag);
+				} else if (*p == 'C') {
+					fixed_width += clock_natural_width(cairo, nag);
+				}
+			}
+			spacer_width = (int)nag->width - fixed_width;
+			if (spacer_width < 0) {
+				spacer_width = 0;
+			}
+		}
+
+		int x = 0;
 		for (const char *p = nag->conf->panel_items; *p; p++) {
 			if (*p == 'T') {
-				render_taskbar(cairo, nag);
+				x += render_taskbar(cairo, nag, x);
 			} else if (*p == 'C') {
-				render_clock(cairo, nag);
+				x += render_clock(cairo, nag, x);
+			} else if (*p == 'S') {
+				x += spacer_width;
 			} else {
 				wlr_log(WLR_ERROR, "Unknown panel_items code '%c'", *p);
 			}
@@ -552,6 +637,8 @@ nag_destroy(struct nag *nag)
 		toplevel_destroy(toplevel);
 	}
 
+	widgets_free(nag);
+
 	if (nag->toplevel_manager) {
 		zwlr_foreign_toplevel_manager_v1_destroy(nag->toplevel_manager);
 		nag->toplevel_manager = NULL;
@@ -748,11 +835,13 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 
 	int x = seat->pointer.x;
 
-	struct toplevel *toplevel;
-	wl_list_for_each(toplevel, &nag->toplevels, link) {
-		if (x >= toplevel->btn_x && x < toplevel->btn_x + toplevel->btn_width) {
-			zwlr_foreign_toplevel_handle_v1_activate(
-				toplevel->handle, seat->wl_seat);
+	struct widget *widget;
+	wl_list_for_each(widget, &nag->widgets, link) {
+		if (x >= widget->x && x < widget->x + widget->width) {
+			if (widget->toplevel) {
+				zwlr_foreign_toplevel_handle_v1_activate(
+					widget->toplevel->handle, seat->wl_seat);
+			}
 			break;
 		}
 	}
@@ -1197,7 +1286,7 @@ conf_init(struct conf *conf)
 	conf->text = 0xFFFFFFFF;
 	conf->button_background = 0x4A4A4AFF;
 	conf->button_active = 0x5A8AC6FF;
-	conf->panel_items = strdup("TC");
+	conf->panel_items = strdup("TSC");
 }
 
 int
@@ -1238,6 +1327,7 @@ main(int argc, char **argv)
 	wl_list_init(&nag.outputs);
 	wl_list_init(&nag.seats);
 	wl_list_init(&nag.toplevels);
+	wl_list_init(&nag.widgets);
 
 	wlr_log_init(WLR_DEBUG, NULL);
 
