@@ -46,7 +46,7 @@ struct conf {
 	char *panel_items;
 };
 
-struct nag;
+struct panel;
 
 #define BUTTON_PADDING 8
 #define BUTTON_MAX_WIDTH 200
@@ -56,15 +56,15 @@ struct toplevel {
 	char *title;
 	char *app_id;
 	bool active;
-	struct nag *nag;
-	struct wl_list link; /* nag.toplevels */
+	struct panel *panel;
+	struct wl_list link; /* panel.toplevels */
 };
 
 struct widget {
 	int x;
 	int width;
 	struct toplevel *toplevel; /* NULL if not a taskbar button */
-	struct wl_list link; /* nag.widgets */
+	struct wl_list link; /* panel.widgets */
 };
 
 struct pointer {
@@ -80,9 +80,9 @@ struct pointer {
 struct seat {
 	struct wl_seat *wl_seat;
 	uint32_t wl_name;
-	struct nag *nag;
+	struct panel *panel;
 	struct pointer pointer;
-	struct wl_list link; /* nag.seats */
+	struct wl_list link; /* panel.seats */
 };
 
 struct output {
@@ -90,8 +90,8 @@ struct output {
 	struct wl_output *wl_output;
 	uint32_t wl_name;
 	uint32_t scale;
-	struct nag *nag;
-	struct wl_list link; /* nag.outputs */
+	struct panel *panel;
+	struct wl_list link; /* panel.outputs */
 };
 
 enum {
@@ -103,7 +103,7 @@ enum {
 	NR_FDS,
 };
 
-struct nag {
+struct panel {
 	bool run_display;
 
 	struct wl_display *display;
@@ -244,17 +244,17 @@ cairo_set_source_u32(cairo_t *cairo, uint32_t color)
 }
 
 static void
-widgets_free(struct nag *nag)
+widgets_free(struct panel *panel)
 {
 	struct widget *widget, *tmp;
-	wl_list_for_each_safe(widget, tmp, &nag->widgets, link) {
+	wl_list_for_each_safe(widget, tmp, &panel->widgets, link) {
 		wl_list_remove(&widget->link);
 		free(widget);
 	}
 }
 
 static void
-widget_add(struct nag *nag, int x, int width, struct toplevel *toplevel)
+widget_add(struct panel *panel, int x, int width, struct toplevel *toplevel)
 {
 	struct widget *widget = calloc(1, sizeof(*widget));
 	if (!widget) {
@@ -264,19 +264,19 @@ widget_add(struct nag *nag, int x, int width, struct toplevel *toplevel)
 	widget->x = x;
 	widget->width = width;
 	widget->toplevel = toplevel;
-	wl_list_insert(nag->widgets.prev, &widget->link);
+	wl_list_insert(panel->widgets.prev, &widget->link);
 }
 
 static int
-taskbar_natural_width(cairo_t *cairo, struct nag *nag)
+taskbar_natural_width(cairo_t *cairo, struct panel *panel)
 {
 	int total = BUTTON_PADDING;
 	struct toplevel *toplevel;
-	wl_list_for_each(toplevel, &nag->toplevels, link) {
+	wl_list_for_each(toplevel, &panel->toplevels, link) {
 		const char *label = toplevel->title ? toplevel->title
 			: (toplevel->app_id ? toplevel->app_id : "?");
 		int text_width, text_height;
-		get_text_size(cairo, nag->conf->font_description,
+		get_text_size(cairo, panel->conf->font_description,
 			&text_width, &text_height, NULL, 1, false, "%s", label);
 		int btn_width = text_width + 2 * BUTTON_PADDING;
 		if (btn_width > BUTTON_MAX_WIDTH) {
@@ -288,28 +288,28 @@ taskbar_natural_width(cairo_t *cairo, struct nag *nag)
 }
 
 static int
-clock_natural_width(cairo_t *cairo, struct nag *nag)
+clock_natural_width(cairo_t *cairo, struct panel *panel)
 {
 	char buf[6]; /* "HH:MM\0" */
 	time_t t = time(NULL);
 	strftime(buf, sizeof(buf), "%H:%M", localtime(&t));
 	int text_width, text_height;
-	get_text_size(cairo, nag->conf->font_description,
+	get_text_size(cairo, panel->conf->font_description,
 		&text_width, &text_height, NULL, 1, false, "%s", buf);
 	return text_width + 2 * BUTTON_PADDING;
 }
 
 static int
-render_taskbar(cairo_t *cairo, struct nag *nag, int start_x)
+render_taskbar(cairo_t *cairo, struct panel *panel, int start_x)
 {
 	int x = start_x + BUTTON_PADDING;
 	struct toplevel *toplevel;
-	wl_list_for_each(toplevel, &nag->toplevels, link) {
+	wl_list_for_each(toplevel, &panel->toplevels, link) {
 		const char *label = toplevel->title ? toplevel->title
 			: (toplevel->app_id ? toplevel->app_id : "?");
 
 		int text_width, text_height;
-		get_text_size(cairo, nag->conf->font_description,
+		get_text_size(cairo, panel->conf->font_description,
 			&text_width, &text_height, NULL, 1, false, "%s", label);
 
 		int btn_width = text_width + 2 * BUTTON_PADDING;
@@ -317,25 +317,25 @@ render_taskbar(cairo_t *cairo, struct nag *nag, int start_x)
 			btn_width = BUTTON_MAX_WIDTH;
 		}
 
-		widget_add(nag, x, btn_width, toplevel);
+		widget_add(panel, x, btn_width, toplevel);
 
 		/* Draw button background */
 		if (toplevel->active) {
-			cairo_set_source_u32(cairo, nag->conf->button_active);
+			cairo_set_source_u32(cairo, panel->conf->button_active);
 		} else {
-			cairo_set_source_u32(cairo, nag->conf->button_background);
+			cairo_set_source_u32(cairo, panel->conf->button_background);
 		}
-		cairo_rectangle(cairo, x, 2, btn_width, nag->height - 4);
+		cairo_rectangle(cairo, x, 2, btn_width, panel->height - 4);
 		cairo_fill(cairo);
 
 		/* Draw button label, clipped to button width */
 		cairo_save(cairo);
-		cairo_rectangle(cairo, x + BUTTON_PADDING, 0, btn_width - 2 * BUTTON_PADDING, nag->height);
+		cairo_rectangle(cairo, x + BUTTON_PADDING, 0, btn_width - 2 * BUTTON_PADDING, panel->height);
 		cairo_clip(cairo);
-		cairo_set_source_u32(cairo, nag->conf->text);
+		cairo_set_source_u32(cairo, panel->conf->text);
 		cairo_move_to(cairo, x + BUTTON_PADDING,
-			(nag->height - text_height) / 2);
-		render_text(cairo, nag->conf->font_description, 1, false, "%s", label);
+			(panel->height - text_height) / 2);
+		render_text(cairo, panel->conf->font_description, 1, false, "%s", label);
 		cairo_restore(cairo);
 
 		x += btn_width + BUTTON_PADDING;
@@ -344,7 +344,7 @@ render_taskbar(cairo_t *cairo, struct nag *nag, int start_x)
 }
 
 static int
-render_clock(cairo_t *cairo, struct nag *nag, int start_x)
+render_clock(cairo_t *cairo, struct panel *panel, int start_x)
 {
 	time_t t = time(NULL);
 	struct tm *tm_info = localtime(&t);
@@ -352,51 +352,51 @@ render_clock(cairo_t *cairo, struct nag *nag, int start_x)
 	strftime(buf, sizeof(buf), "%H:%M", tm_info);
 
 	int text_width, text_height;
-	get_text_size(cairo, nag->conf->font_description,
+	get_text_size(cairo, panel->conf->font_description,
 		&text_width, &text_height, NULL, 1, false, "%s", buf);
 
 	int width = text_width + 2 * BUTTON_PADDING;
-	widget_add(nag, start_x, width, NULL);
+	widget_add(panel, start_x, width, NULL);
 
-	cairo_set_source_u32(cairo, nag->conf->text);
-	cairo_move_to(cairo, start_x + BUTTON_PADDING, (nag->height - text_height) / 2.0);
-	render_text(cairo, nag->conf->font_description, 1, false, "%s", buf);
+	cairo_set_source_u32(cairo, panel->conf->text);
+	cairo_move_to(cairo, start_x + BUTTON_PADDING, (panel->height - text_height) / 2.0);
+	render_text(cairo, panel->conf->font_description, 1, false, "%s", buf);
 	return width;
 }
 
 static void
-render_to_cairo(cairo_t *cairo, struct nag *nag)
+render_to_cairo(cairo_t *cairo, struct panel *panel)
 {
 	cairo_set_operator(cairo, CAIRO_OPERATOR_SOURCE);
-	cairo_set_source_u32(cairo, nag->conf->background);
+	cairo_set_source_u32(cairo, panel->conf->background);
 	cairo_paint(cairo);
 
-	widgets_free(nag);
+	widgets_free(panel);
 
-	if (nag->conf->panel_items) {
+	if (panel->conf->panel_items) {
 		/* Compute spacer width if 'S' is present */
 		int spacer_width = 0;
-		if (strchr(nag->conf->panel_items, 'S')) {
+		if (strchr(panel->conf->panel_items, 'S')) {
 			int fixed_width = 0;
-			for (const char *p = nag->conf->panel_items; *p; p++) {
+			for (const char *p = panel->conf->panel_items; *p; p++) {
 				if (*p == 'T') {
-					fixed_width += taskbar_natural_width(cairo, nag);
+					fixed_width += taskbar_natural_width(cairo, panel);
 				} else if (*p == 'C') {
-					fixed_width += clock_natural_width(cairo, nag);
+					fixed_width += clock_natural_width(cairo, panel);
 				}
 			}
-			spacer_width = (int)nag->width - fixed_width;
+			spacer_width = (int)panel->width - fixed_width;
 			if (spacer_width < 0) {
 				spacer_width = 0;
 			}
 		}
 
 		int x = 0;
-		for (const char *p = nag->conf->panel_items; *p; p++) {
+		for (const char *p = panel->conf->panel_items; *p; p++) {
 			if (*p == 'T') {
-				x += render_taskbar(cairo, nag, x);
+				x += render_taskbar(cairo, panel, x);
 			} else if (*p == 'C') {
-				x += render_clock(cairo, nag, x);
+				x += render_clock(cairo, panel, x);
 			} else if (*p == 'S') {
 				x += spacer_width;
 			} else {
@@ -405,35 +405,35 @@ render_to_cairo(cairo_t *cairo, struct nag *nag)
 		}
 	}
 
-	cairo_set_source_u32(cairo, nag->conf->text);
-	cairo_rectangle(cairo, 0, nag->height, nag->width, 1);
+	cairo_set_source_u32(cairo, panel->conf->text);
+	cairo_rectangle(cairo, 0, panel->height, panel->width, 1);
 	cairo_fill(cairo);
 }
 
 static void
-render_frame(struct nag *nag)
+render_frame(struct panel *panel)
 {
-	if (!nag->run_display || !nag->width || !nag->height) {
+	if (!panel->run_display || !panel->width || !panel->height) {
 		return;
 	}
 
 	cairo_surface_t *recorder = cairo_recording_surface_create(
 			CAIRO_CONTENT_COLOR_ALPHA, NULL);
 	cairo_t *cairo = cairo_create(recorder);
-	cairo_scale(cairo, nag->scale, nag->scale);
+	cairo_scale(cairo, panel->scale, panel->scale);
 	cairo_save(cairo);
 	cairo_set_operator(cairo, CAIRO_OPERATOR_CLEAR);
 	cairo_paint(cairo);
 	cairo_restore(cairo);
-	render_to_cairo(cairo, nag);
+	render_to_cairo(cairo, panel);
 
-	nag->current_buffer = get_next_buffer(nag->shm, nag->buffers,
-		nag->width * nag->scale, nag->height * nag->scale);
-	if (!nag->current_buffer) {
+	panel->current_buffer = get_next_buffer(panel->shm, panel->buffers,
+		panel->width * panel->scale, panel->height * panel->scale);
+	if (!panel->current_buffer) {
 		goto cleanup;
 	}
 
-	cairo_t *shm = nag->current_buffer->cairo;
+	cairo_t *shm = panel->current_buffer->cairo;
 	cairo_save(shm);
 	cairo_set_operator(shm, CAIRO_OPERATOR_CLEAR);
 	cairo_paint(shm);
@@ -441,11 +441,11 @@ render_frame(struct nag *nag)
 	cairo_set_source_surface(shm, recorder, 0.0, 0.0);
 	cairo_paint(shm);
 
-	wl_surface_set_buffer_scale(nag->surface, nag->scale);
-	wl_surface_attach(nag->surface, nag->current_buffer->buffer, 0, 0);
-	wl_surface_damage(nag->surface, 0, 0, nag->width, nag->height);
-	wl_surface_commit(nag->surface);
-	wl_display_roundtrip(nag->display);
+	wl_surface_set_buffer_scale(panel->surface, panel->scale);
+	wl_surface_attach(panel->surface, panel->current_buffer->buffer, 0, 0);
+	wl_surface_damage(panel->surface, 0, 0, panel->width, panel->height);
+	wl_surface_commit(panel->surface);
+	wl_display_roundtrip(panel->display);
 
 cleanup:
 	cairo_surface_destroy(recorder);
@@ -538,7 +538,7 @@ handle_toplevel_done(void *data,
 		struct zwlr_foreign_toplevel_handle_v1 *handle)
 {
 	struct toplevel *toplevel = data;
-	render_frame(toplevel->nag);
+	render_frame(toplevel->panel);
 }
 
 static void
@@ -546,9 +546,9 @@ handle_toplevel_closed(void *data,
 		struct zwlr_foreign_toplevel_handle_v1 *handle)
 {
 	struct toplevel *toplevel = data;
-	struct nag *nag = toplevel->nag;
+	struct panel *panel = toplevel->panel;
 	toplevel_destroy(toplevel);
-	render_frame(nag);
+	render_frame(panel);
 }
 
 static void
@@ -575,15 +575,15 @@ handle_toplevel_manager_toplevel(void *data,
 		struct zwlr_foreign_toplevel_manager_v1 *manager,
 		struct zwlr_foreign_toplevel_handle_v1 *handle)
 {
-	struct nag *nag = data;
+	struct panel *panel = data;
 	struct toplevel *toplevel = calloc(1, sizeof(*toplevel));
 	if (!toplevel) {
 		perror("calloc");
 		return;
 	}
 	toplevel->handle = handle;
-	toplevel->nag = nag;
-	wl_list_insert(nag->toplevels.prev, &toplevel->link);
+	toplevel->panel = panel;
+	wl_list_insert(panel->toplevels.prev, &toplevel->link);
 	zwlr_foreign_toplevel_handle_v1_add_listener(handle,
 		&toplevel_handle_listener, toplevel);
 }
@@ -592,9 +592,9 @@ static void
 handle_toplevel_manager_finished(void *data,
 		struct zwlr_foreign_toplevel_manager_v1 *manager)
 {
-	struct nag *nag = data;
-	zwlr_foreign_toplevel_manager_v1_destroy(nag->toplevel_manager);
-	nag->toplevel_manager = NULL;
+	struct panel *panel = data;
+	zwlr_foreign_toplevel_manager_v1_destroy(panel->toplevel_manager);
+	panel->toplevel_manager = NULL;
 }
 
 static const struct zwlr_foreign_toplevel_manager_v1_listener toplevel_manager_listener = {
@@ -603,53 +603,53 @@ static const struct zwlr_foreign_toplevel_manager_v1_listener toplevel_manager_l
 };
 
 static void
-nag_destroy(struct nag *nag)
+panel_destroy(struct panel *panel)
 {
-	nag->run_display = false;
+	panel->run_display = false;
 
-	pango_font_description_free(nag->conf->font_description);
-	free(nag->conf->panel_items);
-	nag->conf->panel_items = NULL;
+	pango_font_description_free(panel->conf->font_description);
+	free(panel->conf->panel_items);
+	panel->conf->panel_items = NULL;
 
-	if (nag->layer_surface) {
-		zwlr_layer_surface_v1_destroy(nag->layer_surface);
+	if (panel->layer_surface) {
+		zwlr_layer_surface_v1_destroy(panel->layer_surface);
 	}
 
-	if (nag->surface) {
-		wl_surface_destroy(nag->surface);
+	if (panel->surface) {
+		wl_surface_destroy(panel->surface);
 	}
 
-	if (nag->layer_shell) {
-		zwlr_layer_shell_v1_destroy(nag->layer_shell);
+	if (panel->layer_shell) {
+		zwlr_layer_shell_v1_destroy(panel->layer_shell);
 	}
 
-	if (nag->cursor_shape_manager) {
-		wp_cursor_shape_manager_v1_destroy(nag->cursor_shape_manager);
+	if (panel->cursor_shape_manager) {
+		wp_cursor_shape_manager_v1_destroy(panel->cursor_shape_manager);
 	}
 
 	struct seat *seat, *tmpseat;
-	wl_list_for_each_safe(seat, tmpseat, &nag->seats, link) {
+	wl_list_for_each_safe(seat, tmpseat, &panel->seats, link) {
 		seat_destroy(seat);
 	}
 
 	struct toplevel *toplevel, *tmptoplevel;
-	wl_list_for_each_safe(toplevel, tmptoplevel, &nag->toplevels, link) {
+	wl_list_for_each_safe(toplevel, tmptoplevel, &panel->toplevels, link) {
 		toplevel_destroy(toplevel);
 	}
 
-	widgets_free(nag);
+	widgets_free(panel);
 
-	if (nag->toplevel_manager) {
-		zwlr_foreign_toplevel_manager_v1_destroy(nag->toplevel_manager);
-		nag->toplevel_manager = NULL;
+	if (panel->toplevel_manager) {
+		zwlr_foreign_toplevel_manager_v1_destroy(panel->toplevel_manager);
+		panel->toplevel_manager = NULL;
 	}
 
-	destroy_buffer(&nag->buffers[0]);
-	destroy_buffer(&nag->buffers[1]);
+	destroy_buffer(&panel->buffers[0]);
+	destroy_buffer(&panel->buffers[1]);
 
-	if (nag->outputs.prev || nag->outputs.next) {
+	if (panel->outputs.prev || panel->outputs.next) {
 		struct output *output, *temp;
-		wl_list_for_each_safe(output, temp, &nag->outputs, link) {
+		wl_list_for_each_safe(output, temp, &panel->outputs, link) {
 			wl_output_destroy(output->wl_output);
 			free(output->name);
 			wl_list_remove(&output->link);
@@ -657,40 +657,40 @@ nag_destroy(struct nag *nag)
 		};
 	}
 
-	if (nag->compositor) {
-		wl_compositor_destroy(nag->compositor);
+	if (panel->compositor) {
+		wl_compositor_destroy(panel->compositor);
 	}
 
-	if (nag->shm) {
-		wl_shm_destroy(nag->shm);
+	if (panel->shm) {
+		wl_shm_destroy(panel->shm);
 	}
 
-	if (nag->display) {
-		wl_display_disconnect(nag->display);
+	if (panel->display) {
+		wl_display_disconnect(panel->display);
 	}
 	pango_cairo_font_map_set_default(NULL);
 
-	close_pollfd(&nag->pollfds[FD_TIMER]);
-	close_pollfd(&nag->pollfds[FD_SIGNAL]);
-	close_pollfd(&nag->pollfds[FD_CLOCK]);
+	close_pollfd(&panel->pollfds[FD_TIMER]);
+	close_pollfd(&panel->pollfds[FD_SIGNAL]);
+	close_pollfd(&panel->pollfds[FD_CLOCK]);
 }
 
 static void
 layer_surface_configure(void *data, struct zwlr_layer_surface_v1 *surface,
 		uint32_t serial, uint32_t width, uint32_t height)
 {
-	struct nag *nag = data;
-	nag->width = width;
-	nag->height = height;
+	struct panel *panel = data;
+	panel->width = width;
+	panel->height = height;
 	zwlr_layer_surface_v1_ack_configure(surface, serial);
-	render_frame(nag);
+	render_frame(panel);
 }
 
 static void
 layer_surface_closed(void *data, struct zwlr_layer_surface_v1 *surface)
 {
-	struct nag *nag = data;
-	nag_destroy(nag);
+	struct panel *panel = data;
+	panel_destroy(panel);
 }
 
 static const struct zwlr_layer_surface_v1_listener layer_surface_listener = {
@@ -701,15 +701,15 @@ static const struct zwlr_layer_surface_v1_listener layer_surface_listener = {
 static void
 surface_enter(void *data, struct wl_surface *surface, struct wl_output *output)
 {
-	struct nag *nag = data;
-	struct output *nag_output;
-	wl_list_for_each(nag_output, &nag->outputs, link) {
-		if (nag_output->wl_output == output) {
+	struct panel *panel = data;
+	struct output *panel_output;
+	wl_list_for_each(panel_output, &panel->outputs, link) {
+		if (panel_output->wl_output == output) {
 			wlr_log(WLR_DEBUG, "Surface enter on output %s",
-					nag_output->name);
-			nag->output = nag_output;
-			nag->scale = nag->output->scale;
-			render_frame(nag);
+					panel_output->name);
+			panel->output = panel_output;
+			panel->scale = panel->output->scale;
+			render_frame(panel);
 			break;
 		}
 	}
@@ -730,7 +730,7 @@ static void
 update_cursor(struct seat *seat)
 {
 	struct pointer *pointer = &seat->pointer;
-	struct nag *nag = seat->nag;
+	struct panel *panel = seat->panel;
 	if (pointer->cursor_theme) {
 		wl_cursor_theme_destroy(pointer->cursor_theme);
 	}
@@ -746,7 +746,7 @@ update_cursor(struct seat *seat)
 		}
 	}
 	pointer->cursor_theme = wl_cursor_theme_load(
-		cursor_theme, cursor_size * nag->scale, nag->shm);
+		cursor_theme, cursor_size * panel->scale, panel->shm);
 	if (!pointer->cursor_theme) {
 		wlr_log(WLR_ERROR, "Failed to load cursor theme");
 		return;
@@ -759,23 +759,23 @@ update_cursor(struct seat *seat)
 	}
 	pointer->cursor_image = cursor->images[0];
 	wl_surface_set_buffer_scale(pointer->cursor_surface,
-			nag->scale);
+			panel->scale);
 	wl_surface_attach(pointer->cursor_surface,
 			wl_cursor_image_get_buffer(pointer->cursor_image), 0, 0);
 	wl_pointer_set_cursor(pointer->pointer, pointer->serial,
 			pointer->cursor_surface,
-			pointer->cursor_image->hotspot_x / nag->scale,
-			pointer->cursor_image->hotspot_y / nag->scale);
+			pointer->cursor_image->hotspot_x / panel->scale,
+			pointer->cursor_image->hotspot_y / panel->scale);
 	wl_surface_damage_buffer(pointer->cursor_surface, 0, 0,
 			INT32_MAX, INT32_MAX);
 	wl_surface_commit(pointer->cursor_surface);
 }
 
 static void
-update_all_cursors(struct nag *nag)
+update_all_cursors(struct panel *panel)
 {
 	struct seat *seat;
-	wl_list_for_each(seat, &nag->seats, link) {
+	wl_list_for_each(seat, &panel->seats, link) {
 		if (seat->pointer.pointer) {
 			update_cursor(seat);
 		}
@@ -793,10 +793,10 @@ wl_pointer_enter(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 	pointer->x = wl_fixed_to_int(surface_x);
 	pointer->y = wl_fixed_to_int(surface_y);
 
-	if (seat->nag->cursor_shape_manager) {
+	if (seat->panel->cursor_shape_manager) {
 		struct wp_cursor_shape_device_v1 *device =
 			wp_cursor_shape_manager_v1_get_pointer(
-				seat->nag->cursor_shape_manager, wl_pointer);
+				seat->panel->cursor_shape_manager, wl_pointer);
 		wp_cursor_shape_device_v1_set_shape(device, serial,
 			WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT);
 		wp_cursor_shape_device_v1_destroy(device);
@@ -827,7 +827,7 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 		uint32_t time, uint32_t button, uint32_t state)
 {
 	struct seat *seat = data;
-	struct nag *nag = seat->nag;
+	struct panel *panel = seat->panel;
 
 	if (state != WL_POINTER_BUTTON_STATE_PRESSED) {
 		return;
@@ -836,7 +836,7 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 	int x = seat->pointer.x;
 
 	struct widget *widget;
-	wl_list_for_each(widget, &nag->widgets, link) {
+	wl_list_for_each(widget, &panel->widgets, link) {
 		if (x >= widget->x && x < widget->x + widget->width) {
 			if (widget->toplevel) {
 				zwlr_foreign_toplevel_handle_v1_activate(
@@ -945,28 +945,28 @@ output_done(void *data, struct wl_output *output)
 static void
 output_scale(void *data, struct wl_output *output, int32_t factor)
 {
-	struct output *nag_output = data;
-	nag_output->scale = factor;
-	if (nag_output->nag->output == nag_output) {
-		nag_output->nag->scale = nag_output->scale;
-		if (!nag_output->nag->cursor_shape_manager) {
-			update_all_cursors(nag_output->nag);
+	struct output *panel_output = data;
+	panel_output->scale = factor;
+	if (panel_output->panel->output == panel_output) {
+		panel_output->panel->scale = panel_output->scale;
+		if (!panel_output->panel->cursor_shape_manager) {
+			update_all_cursors(panel_output->panel);
 		}
-		render_frame(nag_output->nag);
+		render_frame(panel_output->panel);
 	}
 }
 
 static void
 output_name(void *data, struct wl_output *output, const char *name)
 {
-	struct output *nag_output = data;
-	nag_output->name = strdup(name);
+	struct output *panel_output = data;
+	panel_output->name = strdup(name);
 
-	const char *outname = nag_output->nag->conf->output;
-	if (!nag_output->nag->output && outname &&
+	const char *outname = panel_output->panel->conf->output;
+	if (!panel_output->panel->output && outname &&
 			strcmp(outname, name) == 0) {
 		wlr_log(WLR_DEBUG, "Using output %s", name);
-		nag_output->nag->output = nag_output;
+		panel_output->panel->output = panel_output;
 	}
 }
 
@@ -990,9 +990,9 @@ static void
 handle_global(void *data, struct wl_registry *registry, uint32_t name,
 		const char *interface, uint32_t version)
 {
-	struct nag *nag = data;
+	struct panel *panel = data;
 	if (strcmp(interface, wl_compositor_interface.name) == 0) {
-		nag->compositor = wl_registry_bind(registry, name,
+		panel->compositor = wl_registry_bind(registry, name,
 				&wl_compositor_interface, 4);
 	} else if (strcmp(interface, wl_seat_interface.name) == 0) {
 		struct seat *seat = calloc(1, sizeof(*seat));
@@ -1001,18 +1001,18 @@ handle_global(void *data, struct wl_registry *registry, uint32_t name,
 			return;
 		}
 
-		seat->nag = nag;
+		seat->panel = panel;
 		seat->wl_name = name;
 		seat->wl_seat =
 			wl_registry_bind(registry, name, &wl_seat_interface, 5);
 
 		wl_seat_add_listener(seat->wl_seat, &seat_listener, seat);
 
-		wl_list_insert(&nag->seats, &seat->link);
+		wl_list_insert(&panel->seats, &seat->link);
 	} else if (strcmp(interface, wl_shm_interface.name) == 0) {
-		nag->shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
+		panel->shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
 	} else if (strcmp(interface, wl_output_interface.name) == 0) {
-		if (!nag->output) {
+		if (!panel->output) {
 			struct output *output = calloc(1, sizeof(*output));
 			if (!output) {
 				perror("calloc");
@@ -1022,37 +1022,37 @@ handle_global(void *data, struct wl_registry *registry, uint32_t name,
 					&wl_output_interface, 4);
 			output->wl_name = name;
 			output->scale = 1;
-			output->nag = nag;
-			wl_list_insert(&nag->outputs, &output->link);
+			output->panel = panel;
+			wl_list_insert(&panel->outputs, &output->link);
 			wl_output_add_listener(output->wl_output,
 					&output_listener, output);
 		}
 	} else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
-		nag->layer_shell = wl_registry_bind(
+		panel->layer_shell = wl_registry_bind(
 				registry, name, &zwlr_layer_shell_v1_interface, 1);
 	} else if (strcmp(interface, wp_cursor_shape_manager_v1_interface.name) == 0) {
-		nag->cursor_shape_manager = wl_registry_bind(
+		panel->cursor_shape_manager = wl_registry_bind(
 				registry, name, &wp_cursor_shape_manager_v1_interface, 1);
 	} else if (strcmp(interface,
 			zwlr_foreign_toplevel_manager_v1_interface.name) == 0) {
-		nag->toplevel_manager = wl_registry_bind(registry, name,
+		panel->toplevel_manager = wl_registry_bind(registry, name,
 				&zwlr_foreign_toplevel_manager_v1_interface, 3);
 		zwlr_foreign_toplevel_manager_v1_add_listener(
-				nag->toplevel_manager,
-				&toplevel_manager_listener, nag);
+				panel->toplevel_manager,
+				&toplevel_manager_listener, panel);
 	}
 }
 
 static void
 handle_global_remove(void *data, struct wl_registry *registry, uint32_t name)
 {
-	struct nag *nag = data;
-	if (nag->output->wl_name == name) {
-		nag->run_display = false;
+	struct panel *panel = data;
+	if (panel->output->wl_name == name) {
+		panel->run_display = false;
 	}
 
 	struct seat *seat, *tmpseat;
-	wl_list_for_each_safe(seat, tmpseat, &nag->seats, link) {
+	wl_list_for_each_safe(seat, tmpseat, &panel->seats, link) {
 		if (seat->wl_name == name) {
 			seat_destroy(seat);
 		}
@@ -1065,92 +1065,92 @@ static const struct wl_registry_listener registry_listener = {
 };
 
 static void
-nag_setup_cursors(struct nag *nag)
+panel_setup_cursors(struct panel *panel)
 {
 	struct seat *seat;
 
-	wl_list_for_each(seat, &nag->seats, link) {
+	wl_list_for_each(seat, &panel->seats, link) {
 		struct pointer *p = &seat->pointer;
 
 		p->cursor_surface =
-			wl_compositor_create_surface(nag->compositor);
+			wl_compositor_create_surface(panel->compositor);
 		assert(p->cursor_surface);
 	}
 }
 
 static void
-nag_setup(struct nag *nag)
+panel_setup(struct panel *panel)
 {
-	nag->display = wl_display_connect(NULL);
-	if (!nag->display) {
+	panel->display = wl_display_connect(NULL);
+	if (!panel->display) {
 		wlr_log(WLR_ERROR, "Unable to connect to the compositor. "
 				"If your compositor is running, check or set the "
 				"WAYLAND_DISPLAY environment variable.");
 		exit(EXIT_FAILURE);
 	}
 
-	nag->scale = 1;
+	panel->scale = 1;
 
-	struct wl_registry *registry = wl_display_get_registry(nag->display);
-	wl_registry_add_listener(registry, &registry_listener, nag);
-	if (wl_display_roundtrip(nag->display) < 0) {
+	struct wl_registry *registry = wl_display_get_registry(panel->display);
+	wl_registry_add_listener(registry, &registry_listener, panel);
+	if (wl_display_roundtrip(panel->display) < 0) {
 		wlr_log(WLR_ERROR, "failed to register with the wayland display");
 		exit(EXIT_FAILURE);
 	}
 
-	assert(nag->compositor && nag->layer_shell && nag->shm);
+	assert(panel->compositor && panel->layer_shell && panel->shm);
 
 	/* Second roundtrip to get wl_output properties */
-	if (wl_display_roundtrip(nag->display) < 0) {
+	if (wl_display_roundtrip(panel->display) < 0) {
 		wlr_log(WLR_ERROR, "Error during outputs init.");
-		nag_destroy(nag);
+		panel_destroy(panel);
 		exit(EXIT_FAILURE);
 	}
 
-	if (!nag->output && nag->conf->output) {
-		wlr_log(WLR_ERROR, "Output '%s' not found", nag->conf->output);
-		nag_destroy(nag);
+	if (!panel->output && panel->conf->output) {
+		wlr_log(WLR_ERROR, "Output '%s' not found", panel->conf->output);
+		panel_destroy(panel);
 		exit(EXIT_FAILURE);
 	}
 
-	if (!nag->cursor_shape_manager) {
-		nag_setup_cursors(nag);
+	if (!panel->cursor_shape_manager) {
+		panel_setup_cursors(panel);
 	}
 
-	nag->surface = wl_compositor_create_surface(nag->compositor);
-	assert(nag->surface);
-	wl_surface_add_listener(nag->surface, &surface_listener, nag);
+	panel->surface = wl_compositor_create_surface(panel->compositor);
+	assert(panel->surface);
+	wl_surface_add_listener(panel->surface, &surface_listener, panel);
 
-	nag->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-			nag->layer_shell, nag->surface,
-			nag->output ? nag->output->wl_output : NULL,
-			nag->conf->layer,
-			"nag");
-	assert(nag->layer_surface);
-	zwlr_layer_surface_v1_add_listener(nag->layer_surface,
-			&layer_surface_listener, nag);
-	zwlr_layer_surface_v1_set_anchor(nag->layer_surface,
-			nag->conf->anchors);
+	panel->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
+			panel->layer_shell, panel->surface,
+			panel->output ? panel->output->wl_output : NULL,
+			panel->conf->layer,
+			"t2play");
+	assert(panel->layer_surface);
+	zwlr_layer_surface_v1_add_listener(panel->layer_surface,
+			&layer_surface_listener, panel);
+	zwlr_layer_surface_v1_set_anchor(panel->layer_surface,
+			panel->conf->anchors);
 
 	wl_registry_destroy(registry);
 
-	nag->pollfds[FD_WAYLAND].fd = wl_display_get_fd(nag->display);
-	nag->pollfds[FD_WAYLAND].events = POLLIN;
+	panel->pollfds[FD_WAYLAND].fd = wl_display_get_fd(panel->display);
+	panel->pollfds[FD_WAYLAND].events = POLLIN;
 
-	if (nag->details.close_timeout != 0) {
-		nag->pollfds[FD_TIMER].fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
-		nag->pollfds[FD_TIMER].events = POLLIN;
+	if (panel->details.close_timeout != 0) {
+		panel->pollfds[FD_TIMER].fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
+		panel->pollfds[FD_TIMER].events = POLLIN;
 		struct itimerspec timeout = {
-			.it_value.tv_sec = nag->details.close_timeout,
+			.it_value.tv_sec = panel->details.close_timeout,
 		};
-		timerfd_settime(nag->pollfds[FD_TIMER].fd, 0, &timeout, NULL);
+		timerfd_settime(panel->pollfds[FD_TIMER].fd, 0, &timeout, NULL);
 	} else {
-		nag->pollfds[FD_TIMER].fd = -1;
+		panel->pollfds[FD_TIMER].fd = -1;
 	}
 
-	if (nag->conf->panel_items && strchr(nag->conf->panel_items, 'C')) {
-		nag->pollfds[FD_CLOCK].fd = timerfd_create(CLOCK_REALTIME, TFD_CLOEXEC);
-		nag->pollfds[FD_CLOCK].events = POLLIN;
+	if (panel->conf->panel_items && strchr(panel->conf->panel_items, 'C')) {
+		panel->pollfds[FD_CLOCK].fd = timerfd_create(CLOCK_REALTIME, TFD_CLOEXEC);
+		panel->pollfds[FD_CLOCK].events = POLLIN;
 		/* Fire at the start of the next minute, then every 60 seconds */
 		struct timespec now;
 		clock_gettime(CLOCK_REALTIME, &now);
@@ -1158,10 +1158,10 @@ nag_setup(struct nag *nag)
 			.it_interval.tv_sec = 60,
 			.it_value.tv_sec = now.tv_sec - (now.tv_sec % 60) + 60,
 		};
-		timerfd_settime(nag->pollfds[FD_CLOCK].fd,
+		timerfd_settime(panel->pollfds[FD_CLOCK].fd,
 			TFD_TIMER_ABSTIME, &clock_timer, NULL);
 	} else {
-		nag->pollfds[FD_CLOCK].fd = -1;
+		panel->pollfds[FD_CLOCK].fd = -1;
 	}
 
 	sigset_t mask;
@@ -1169,8 +1169,8 @@ nag_setup(struct nag *nag)
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGTERM);
 	sigprocmask(SIG_BLOCK, &mask, NULL);
-	nag->pollfds[FD_SIGNAL].fd = signalfd(-1, &mask, SFD_CLOEXEC | SFD_NONBLOCK);
-	nag->pollfds[FD_SIGNAL].events = POLLIN;
+	panel->pollfds[FD_SIGNAL].fd = signalfd(-1, &mask, SFD_CLOEXEC | SFD_NONBLOCK);
+	panel->pollfds[FD_SIGNAL].events = POLLIN;
 }
 
 static void
@@ -1186,46 +1186,46 @@ close_pollfd(struct pollfd *pollfd)
 }
 
 static void
-nag_run(struct nag *nag)
+panel_run(struct panel *panel)
 {
-	nag->run_display = true;
+	panel->run_display = true;
 
-	zwlr_layer_surface_v1_set_size(nag->layer_surface, 0, 30);
-	zwlr_layer_surface_v1_set_exclusive_zone(nag->layer_surface, 30);
-	wl_surface_commit(nag->surface);
-	wl_display_roundtrip(nag->display);
+	zwlr_layer_surface_v1_set_size(panel->layer_surface, 0, 30);
+	zwlr_layer_surface_v1_set_exclusive_zone(panel->layer_surface, 30);
+	wl_surface_commit(panel->surface);
+	wl_display_roundtrip(panel->display);
 
-	render_frame(nag);
-	while (nag->run_display) {
-		while (wl_display_prepare_read(nag->display) != 0) {
-			wl_display_dispatch_pending(nag->display);
+	render_frame(panel);
+	while (panel->run_display) {
+		while (wl_display_prepare_read(panel->display) != 0) {
+			wl_display_dispatch_pending(panel->display);
 		}
 
 		errno = 0;
-		if (wl_display_flush(nag->display) == -1 && errno != EAGAIN) {
+		if (wl_display_flush(panel->display) == -1 && errno != EAGAIN) {
 			break;
 		}
 
-		if (!nag->run_display) {
+		if (!panel->run_display) {
 			break;
 		}
 
-		poll(nag->pollfds, NR_FDS, -1);
-		if (nag->pollfds[FD_WAYLAND].revents & POLLIN) {
-			wl_display_read_events(nag->display);
+		poll(panel->pollfds, NR_FDS, -1);
+		if (panel->pollfds[FD_WAYLAND].revents & POLLIN) {
+			wl_display_read_events(panel->display);
 		} else {
-			wl_display_cancel_read(nag->display);
+			wl_display_cancel_read(panel->display);
 		}
-		if (nag->pollfds[FD_TIMER].revents & POLLIN) {
+		if (panel->pollfds[FD_TIMER].revents & POLLIN) {
 			break;
 		}
-		if (nag->pollfds[FD_SIGNAL].revents & POLLIN) {
+		if (panel->pollfds[FD_SIGNAL].revents & POLLIN) {
 			break;
 		}
-		if (nag->pollfds[FD_CLOCK].revents & POLLIN) {
+		if (panel->pollfds[FD_CLOCK].revents & POLLIN) {
 			uint64_t exp;
-			read(nag->pollfds[FD_CLOCK].fd, &exp, sizeof(exp));
-			render_frame(nag);
+			read(panel->pollfds[FD_CLOCK].fd, &exp, sizeof(exp));
+			render_frame(panel);
 		}
 	}
 }
@@ -1320,20 +1320,20 @@ main(int argc, char **argv)
 		load_config(&conf, config_path);
 	}
 
-	struct nag nag = {
+	struct panel panel = {
 		.conf = &conf,
 	};
 
-	wl_list_init(&nag.outputs);
-	wl_list_init(&nag.seats);
-	wl_list_init(&nag.toplevels);
-	wl_list_init(&nag.widgets);
+	wl_list_init(&panel.outputs);
+	wl_list_init(&panel.seats);
+	wl_list_init(&panel.toplevels);
+	wl_list_init(&panel.widgets);
 
 	wlr_log_init(WLR_DEBUG, NULL);
 
-	nag_setup(&nag);
-	nag_run(&nag);
-	nag_destroy(&nag);
+	panel_setup(&panel);
+	panel_run(&panel);
+	panel_destroy(&panel);
 
 	return EXIT_SUCCESS;
 }
