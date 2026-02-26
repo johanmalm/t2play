@@ -96,7 +96,6 @@ struct output {
 
 enum {
 	FD_WAYLAND,
-	FD_TIMER,
 	FD_SIGNAL,
 	FD_CLOCK,
 
@@ -131,23 +130,6 @@ struct panel {
 	struct conf *conf;
 	char *message;
 	struct pollfd pollfds[NR_FDS];
-
-	struct {
-		bool visible;
-		char *message;
-		char *details_text;
-		int close_timeout;
-		bool use_exclusive_zone;
-
-		int x;
-		int y;
-		int width;
-		int height;
-
-		int offset;
-		int visible_lines;
-		int total_lines;
-	} details;
 };
 
 static void close_pollfd(struct pollfd *pollfd);
@@ -670,7 +652,6 @@ panel_destroy(struct panel *panel)
 	}
 	pango_cairo_font_map_set_default(NULL);
 
-	close_pollfd(&panel->pollfds[FD_TIMER]);
 	close_pollfd(&panel->pollfds[FD_SIGNAL]);
 	close_pollfd(&panel->pollfds[FD_CLOCK]);
 }
@@ -1137,17 +1118,6 @@ panel_setup(struct panel *panel)
 	panel->pollfds[FD_WAYLAND].fd = wl_display_get_fd(panel->display);
 	panel->pollfds[FD_WAYLAND].events = POLLIN;
 
-	if (panel->details.close_timeout != 0) {
-		panel->pollfds[FD_TIMER].fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
-		panel->pollfds[FD_TIMER].events = POLLIN;
-		struct itimerspec timeout = {
-			.it_value.tv_sec = panel->details.close_timeout,
-		};
-		timerfd_settime(panel->pollfds[FD_TIMER].fd, 0, &timeout, NULL);
-	} else {
-		panel->pollfds[FD_TIMER].fd = -1;
-	}
-
 	if (panel->conf->panel_items && strchr(panel->conf->panel_items, 'C')) {
 		panel->pollfds[FD_CLOCK].fd = timerfd_create(CLOCK_REALTIME, TFD_CLOEXEC);
 		panel->pollfds[FD_CLOCK].events = POLLIN;
@@ -1215,9 +1185,6 @@ panel_run(struct panel *panel)
 			wl_display_read_events(panel->display);
 		} else {
 			wl_display_cancel_read(panel->display);
-		}
-		if (panel->pollfds[FD_TIMER].revents & POLLIN) {
-			break;
 		}
 		if (panel->pollfds[FD_SIGNAL].revents & POLLIN) {
 			break;
