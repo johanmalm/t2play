@@ -47,24 +47,37 @@ struct conf {
 };
 
 struct panel;
+struct seat;
+struct widget;
 
 #define BUTTON_PADDING 8
 #define BUTTON_MAX_WIDTH 200
 
+enum widget_type {
+	WIDGET_TOPLEVEL,
+	WIDGET_CLOCK,
+};
+
+struct widget_impl {
+	void (*on_left_button_press)(struct widget *widget, struct seat *seat);
+};
+
+struct widget {
+	int x;
+	int width;
+	enum widget_type type;
+	const struct widget_impl *impl;
+	struct wl_list link; /* panel.widgets */
+};
+
 struct toplevel {
+	struct widget base;
 	struct zwlr_foreign_toplevel_handle_v1 *handle;
 	char *title;
 	char *app_id;
 	bool active;
 	struct panel *panel;
 	struct wl_list link; /* panel.toplevels */
-};
-
-struct widget {
-	int x;
-	int width;
-	struct toplevel *toplevel; /* NULL if not a taskbar button */
-	struct wl_list link; /* panel.widgets */
 };
 
 struct pointer {
@@ -225,18 +238,48 @@ cairo_set_source_u32(cairo_t *cairo, uint32_t color)
 			(color >> (0*8) & 0xFF) / 255.0);
 }
 
+static struct toplevel *
+toplevel_from_widget(struct widget *widget)
+{
+	assert(widget->type == WIDGET_TOPLEVEL);
+	return (struct toplevel *)widget;
+}
+
+static void
+widget_toplevel_on_left_button_press(struct widget *widget, struct seat *seat)
+{
+	struct toplevel *toplevel = toplevel_from_widget(widget);
+	zwlr_foreign_toplevel_handle_v1_activate(toplevel->handle, seat->wl_seat);
+}
+
+static const struct widget_impl toplevel_widget_impl = {
+	.on_left_button_press = widget_toplevel_on_left_button_press,
+};
+
+static void
+widget_on_left_button_press(struct widget *widget, struct seat *seat)
+{
+	if (widget->impl && widget->impl->on_left_button_press) {
+		widget->impl->on_left_button_press(widget, seat);
+	}
+}
+
 static void
 widgets_free(struct panel *panel)
 {
 	struct widget *widget, *tmp;
 	wl_list_for_each_safe(widget, tmp, &panel->widgets, link) {
 		wl_list_remove(&widget->link);
-		free(widget);
+		if (widget->type == WIDGET_TOPLEVEL) {
+			wl_list_init(&widget->link);
+		} else {
+			free(widget);
+		}
 	}
 }
 
 static void
-widget_add(struct panel *panel, int x, int width, struct toplevel *toplevel)
+widget_add(struct panel *panel, int x, int width)
 {
 	struct widget *widget = calloc(1, sizeof(*widget));
 	if (!widget) {
@@ -245,7 +288,7 @@ widget_add(struct panel *panel, int x, int width, struct toplevel *toplevel)
 	}
 	widget->x = x;
 	widget->width = width;
-	widget->toplevel = toplevel;
+	widget->type = WIDGET_CLOCK;
 	wl_list_insert(panel->widgets.prev, &widget->link);
 }
 
@@ -299,7 +342,9 @@ render_taskbar(cairo_t *cairo, struct panel *panel, int start_x)
 			btn_width = BUTTON_MAX_WIDTH;
 		}
 
-		widget_add(panel, x, btn_width, toplevel);
+		toplevel->base.x = x;
+		toplevel->base.width = btn_width;
+		wl_list_insert(panel->widgets.prev, &toplevel->base.link);
 
 		/* Draw button background */
 		if (toplevel->active) {
@@ -338,7 +383,7 @@ render_clock(cairo_t *cairo, struct panel *panel, int start_x)
 		&text_width, &text_height, NULL, 1, false, "%s", buf);
 
 	int width = text_width + 2 * BUTTON_PADDING;
-	widget_add(panel, start_x, width, NULL);
+	widget_add(panel, start_x, width);
 
 	cairo_set_source_u32(cairo, panel->conf->text);
 	cairo_move_to(cairo, start_x + BUTTON_PADDING, (panel->height - text_height) / 2.0);
@@ -451,6 +496,7 @@ seat_destroy(struct seat *seat)
 static void
 toplevel_destroy(struct toplevel *toplevel)
 {
+	wl_list_remove(&toplevel->base.link);
 	zwlr_foreign_toplevel_handle_v1_destroy(toplevel->handle);
 	free(toplevel->title);
 	free(toplevel->app_id);
@@ -565,6 +611,9 @@ handle_toplevel_manager_toplevel(void *data,
 	}
 	toplevel->handle = handle;
 	toplevel->panel = panel;
+	wl_list_init(&toplevel->base.link);
+	toplevel->base.type = WIDGET_TOPLEVEL;
+	toplevel->base.impl = &toplevel_widget_impl;
 	wl_list_insert(panel->toplevels.prev, &toplevel->link);
 	zwlr_foreign_toplevel_handle_v1_add_listener(handle,
 		&toplevel_handle_listener, toplevel);
@@ -614,12 +663,12 @@ panel_destroy(struct panel *panel)
 		seat_destroy(seat);
 	}
 
+	widgets_free(panel);
+
 	struct toplevel *toplevel, *tmptoplevel;
 	wl_list_for_each_safe(toplevel, tmptoplevel, &panel->toplevels, link) {
 		toplevel_destroy(toplevel);
 	}
-
-	widgets_free(panel);
 
 	if (panel->toplevel_manager) {
 		zwlr_foreign_toplevel_manager_v1_destroy(panel->toplevel_manager);
@@ -819,10 +868,7 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 	struct widget *widget;
 	wl_list_for_each(widget, &panel->widgets, link) {
 		if (x >= widget->x && x < widget->x + widget->width) {
-			if (widget->toplevel) {
-				zwlr_foreign_toplevel_handle_v1_activate(
-					widget->toplevel->handle, seat->wl_seat);
-			}
+			widget_on_left_button_press(widget, seat);
 			break;
 		}
 	}
