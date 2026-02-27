@@ -32,6 +32,7 @@ wlroots = dependency('wlroots-0.19')
 sources = files(
   'main.c',
   'pool.c',
+  'util.c',
 )
 
 wl_protocol_dir = wayland_protos.get_variable('pkgdatadir')
