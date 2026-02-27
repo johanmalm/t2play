@@ -25,7 +25,7 @@
 #include <wayland-cursor.h>
 #include <wlr/util/log.h>
 #include <cyaml/cyaml.h>
-#include "pool.h"
+#include "panel.h"
 #include "cursor-shape-v1-client-protocol.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
