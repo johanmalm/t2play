@@ -137,5 +137,10 @@ struct panel {
 struct pool_buffer *get_next_buffer(struct wl_shm *shm,
 		struct pool_buffer pool[static 2], uint32_t width, uint32_t height);
 void destroy_buffer(struct pool_buffer *buffer);
+void render_text(cairo_t *cairo, const PangoFontDescription *desc, double scale,
+	bool markup, const char *fmt, ...);
+void get_text_size(cairo_t *cairo, const PangoFontDescription *desc, int *width,
+	int *height, int *baseline, double scale, bool markup, const char *fmt, ...);
+void cairo_set_source_u32(cairo_t *cairo, uint32_t color);
 
-#endif /* LAB_POOL_BUFFER_H */
+#endif /* PANEL_H */
