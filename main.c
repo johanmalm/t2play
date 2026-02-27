@@ -29,8 +29,6 @@
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 
-static void close_pollfd(struct pollfd *pollfd);
-
 static struct toplevel *
 toplevel_from_widget(struct widget *widget)
 {
@@ -425,6 +423,18 @@ static const struct zwlr_foreign_toplevel_manager_v1_listener toplevel_manager_l
 	.toplevel = handle_toplevel_manager_toplevel,
 	.finished = handle_toplevel_manager_finished,
 };
+
+static void
+close_pollfd(struct pollfd *pollfd)
+{
+	if (pollfd->fd == -1) {
+		return;
+	}
+	close(pollfd->fd);
+	pollfd->fd = -1;
+	pollfd->events = 0;
+	pollfd->revents = 0;
+}
 
 static void
 panel_destroy(struct panel *panel)
@@ -980,18 +990,6 @@ panel_setup(struct panel *panel)
 	sigprocmask(SIG_BLOCK, &mask, NULL);
 	panel->pollfds[FD_SIGNAL].fd = signalfd(-1, &mask, SFD_CLOEXEC | SFD_NONBLOCK);
 	panel->pollfds[FD_SIGNAL].events = POLLIN;
-}
-
-static void
-close_pollfd(struct pollfd *pollfd)
-{
-	if (pollfd->fd == -1) {
-		return;
-	}
-	close(pollfd->fd);
-	pollfd->fd = -1;
-	pollfd->events = 0;
-	pollfd->revents = 0;
 }
 
 static void
