@@ -33,6 +33,8 @@ sources = files(
   'main.c',
   'pool.c',
   'util.c',
+
+  'plugin-taskbar.c',
 )
 
 wl_protocol_dir = wayland_protos.get_variable('pkgdatadir')
