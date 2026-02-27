@@ -17,7 +17,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <wayland-client.h>
-#include "pool.h"
+#include "panel.h"
 
 static int anonymous_shm_open(void)
 {
@@ -29,7 +29,7 @@ static int anonymous_shm_open(void)
 		clock_gettime(CLOCK_MONOTONIC, &ts);
 		pid_t pid = getpid();
 		char name[50];
-		snprintf(name, sizeof(name), "/labnag-%x-%x",
+		snprintf(name, sizeof(name), "/t2play-%x-%x",
 			(unsigned int)pid, (unsigned int)ts.tv_nsec);
 
 		// shm_open guarantees that O_CLOEXEC is set
