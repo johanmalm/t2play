@@ -129,6 +129,7 @@ struct panel {
 	struct pool_buffer buffers[2];
 	struct pool_buffer *current_buffer;
 
+	struct widget *clock_widget;
 	struct conf *conf;
 	char *message;
 	struct pollfd pollfds[NR_FDS];
@@ -150,7 +151,7 @@ void plugin_taskbar_init(struct panel *panel);
 void toplevel_destroy(struct toplevel *toplevel);
 
 
-void widget_add(struct panel *panel, int x, int width, enum widget_type type);
+struct widget *widget_add(struct panel *panel, int x, int width, enum widget_type type);
 void widgets_free(struct panel *panel);
 void widget_on_left_button_press(struct widget *widget, struct seat *seat);
 

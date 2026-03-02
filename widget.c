@@ -21,24 +21,17 @@ widgets_free(struct panel *panel)
 	}
 }
 
-void
+struct widget *
 widget_add(struct panel *panel, int x, int width, enum widget_type type)
 {
-	struct widget *widget;
-	wl_list_for_each(widget, &panel->widgets, link) {
-		if (widget->type == type) {
-			widget->x = x;
-			widget->width = width;
-			return;
-		}
-	}
-	widget = calloc(1, sizeof(*widget));
+	struct widget *widget = calloc(1, sizeof(*widget));
 	if (!widget) {
 		wlr_log(WLR_ERROR, "Failed to allocate widget");
-		return;
+		return NULL;
 	}
 	widget->x = x;
 	widget->width = width;
 	widget->type = type;
 	wl_list_insert(panel->widgets.prev, &widget->link);
+	return widget;
 }

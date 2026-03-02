@@ -119,7 +119,12 @@ render_clock(cairo_t *cairo, struct panel *panel, int start_x)
 		&text_width, &text_height, NULL, 1, false, "%s", buf);
 
 	int width = text_width + 2 * BUTTON_PADDING;
-	widget_add(panel, start_x, width, WIDGET_CLOCK);
+	if (!panel->clock_widget) {
+		panel->clock_widget = widget_add(panel, start_x, width, WIDGET_CLOCK);
+	} else {
+		panel->clock_widget->x = start_x;
+		panel->clock_widget->width = width;
+	}
 
 	cairo_set_source_u32(cairo, panel->conf->text);
 	cairo_move_to(cairo, start_x + BUTTON_PADDING, (panel->height - text_height) / 2.0);
