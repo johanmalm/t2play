@@ -139,10 +139,10 @@ handle_toplevel_manager_toplevel(void *data,
 	}
 	toplevel->handle = handle;
 	toplevel->panel = panel;
-	wl_list_init(&toplevel->base.link);
 	toplevel->base.type = WIDGET_TOPLEVEL;
 	toplevel->base.impl = &toplevel_widget_impl;
 	wl_list_insert(panel->toplevels.prev, &toplevel->link);
+	wl_list_insert(panel->widgets.prev, &toplevel->base.link);
 	zwlr_foreign_toplevel_handle_v1_add_listener(handle,
 		&toplevel_handle_listener, toplevel);
 }
