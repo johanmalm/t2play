@@ -14,27 +14,31 @@ widgets_free(struct panel *panel)
 {
 	struct widget *widget, *tmp;
 	wl_list_for_each_safe(widget, tmp, &panel->widgets, link) {
-		wl_list_remove(&widget->link);
-		// TODO: is this really needed?
-		if (widget->type == WIDGET_TOPLEVEL) {
-			wl_list_init(&widget->link);
-		} else {
+		if (widget->type != WIDGET_TOPLEVEL) {
+			wl_list_remove(&widget->link);
 			free(widget);
 		}
 	}
 }
 
 void
-widget_add(struct panel *panel, int x, int width)
+widget_add(struct panel *panel, int x, int width, enum widget_type type)
 {
-	struct widget *widget = calloc(1, sizeof(*widget));
+	struct widget *widget;
+	wl_list_for_each(widget, &panel->widgets, link) {
+		if (widget->type == type) {
+			widget->x = x;
+			widget->width = width;
+			return;
+		}
+	}
+	widget = calloc(1, sizeof(*widget));
 	if (!widget) {
 		wlr_log(WLR_ERROR, "Failed to allocate widget");
 		return;
 	}
 	widget->x = x;
 	widget->width = width;
-	// TODO: does not look right
-	widget->type = WIDGET_CLOCK;
+	widget->type = type;
 	wl_list_insert(panel->widgets.prev, &widget->link);
 }

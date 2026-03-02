@@ -150,7 +150,7 @@ void plugin_taskbar_init(struct panel *panel);
 void toplevel_destroy(struct toplevel *toplevel);
 
 
-void widget_add(struct panel *panel, int x, int width);
+void widget_add(struct panel *panel, int x, int width, enum widget_type type);
 void widgets_free(struct panel *panel);
 void widget_on_left_button_press(struct widget *widget, struct seat *seat);
 
