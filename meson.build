@@ -33,6 +33,7 @@ sources = files(
   'main.c',
   'pool.c',
   'util.c',
+  'widget.c',
 
   'plugin-taskbar.c',
 )

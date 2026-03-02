@@ -29,42 +29,6 @@
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 
-static void
-widget_on_left_button_press(struct widget *widget, struct seat *seat)
-{
-	if (widget->impl && widget->impl->on_left_button_press) {
-		widget->impl->on_left_button_press(widget, seat);
-	}
-}
-
-static void
-widgets_free(struct panel *panel)
-{
-	struct widget *widget, *tmp;
-	wl_list_for_each_safe(widget, tmp, &panel->widgets, link) {
-		wl_list_remove(&widget->link);
-		if (widget->type == WIDGET_TOPLEVEL) {
-			wl_list_init(&widget->link);
-		} else {
-			free(widget);
-		}
-	}
-}
-
-static void
-widget_add(struct panel *panel, int x, int width)
-{
-	struct widget *widget = calloc(1, sizeof(*widget));
-	if (!widget) {
-		wlr_log(WLR_ERROR, "Failed to allocate widget");
-		return;
-	}
-	widget->x = x;
-	widget->width = width;
-	widget->type = WIDGET_CLOCK;
-	wl_list_insert(panel->widgets.prev, &widget->link);
-}
-
 static int
 taskbar_natural_width(cairo_t *cairo, struct panel *panel)
 {
@@ -171,6 +135,7 @@ render_to_cairo(cairo_t *cairo, struct panel *panel)
 	cairo_set_source_u32(cairo, panel->conf->background);
 	cairo_paint(cairo);
 
+	// TODO: Try not to free widgets for each frame!!
 	widgets_free(panel);
 
 	if (panel->conf->panel_items) {

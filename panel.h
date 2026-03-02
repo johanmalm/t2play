@@ -149,4 +149,9 @@ void cairo_set_source_u32(cairo_t *cairo, uint32_t color);
 void plugin_taskbar_init(struct panel *panel);
 void toplevel_destroy(struct toplevel *toplevel);
 
+
+void widget_add(struct panel *panel, int x, int width);
+void widgets_free(struct panel *panel);
+void widget_on_left_button_press(struct widget *widget, struct seat *seat);
+
 #endif /* PANEL_H */
