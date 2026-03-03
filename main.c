@@ -632,37 +632,24 @@ handle_global(void *data, struct wl_registry *registry, uint32_t name,
 		panel->compositor = wl_registry_bind(registry, name,
 				&wl_compositor_interface, 4);
 	} else if (strcmp(interface, wl_seat_interface.name) == 0) {
-		struct seat *seat = calloc(1, sizeof(*seat));
-		if (!seat) {
-			perror("calloc");
-			return;
-		}
-
+		struct seat *seat = znew(*seat);
 		seat->panel = panel;
 		seat->wl_name = name;
-		seat->wl_seat =
-			wl_registry_bind(registry, name, &wl_seat_interface, 5);
-
+		seat->wl_seat = wl_registry_bind(registry, name, &wl_seat_interface, 5);
 		wl_seat_add_listener(seat->wl_seat, &seat_listener, seat);
-
 		wl_list_insert(&panel->seats, &seat->link);
 	} else if (strcmp(interface, wl_shm_interface.name) == 0) {
 		panel->shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
 	} else if (strcmp(interface, wl_output_interface.name) == 0) {
 		if (!panel->output) {
-			struct output *output = calloc(1, sizeof(*output));
-			if (!output) {
-				perror("calloc");
-				return;
-			}
+			struct output *output = znew(*output);
 			output->wl_output = wl_registry_bind(registry, name,
-					&wl_output_interface, 4);
+				&wl_output_interface, 4);
 			output->wl_name = name;
 			output->scale = 1;
 			output->panel = panel;
 			wl_list_insert(&panel->outputs, &output->link);
-			wl_output_add_listener(output->wl_output,
-					&output_listener, output);
+			wl_output_add_listener(output->wl_output, &output_listener, output);
 		}
 	} else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
 		panel->layer_shell = wl_registry_bind(

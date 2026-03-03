@@ -1,6 +1,26 @@
 #include "panel.h"
 #include <wlr/util/log.h>
 
+void
+die_if_null(void *ptr)
+{
+	if (!ptr) {
+		perror("Failed to allocate memory");
+		exit(EXIT_FAILURE);
+	}
+}
+
+void *
+xzalloc(size_t size)
+{
+	if (!size) {
+		return NULL;
+	}
+	void *ptr = calloc(1, size);
+	die_if_null(ptr);
+	return ptr;
+}
+
 static PangoLayout *
 get_pango_layout(cairo_t *cairo, const PangoFontDescription *desc,
 		const char *text, double scale, bool markup)

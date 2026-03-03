@@ -27,11 +27,7 @@ widgets_free(struct panel *panel)
 void
 widget_add(struct panel *panel, int x, int width)
 {
-	struct widget *widget = calloc(1, sizeof(*widget));
-	if (!widget) {
-		wlr_log(WLR_ERROR, "Failed to allocate widget");
-		return;
-	}
+	struct widget *widget = znew(*widget);
 	widget->x = x;
 	widget->width = width;
 	// TODO: does not look right

@@ -132,11 +132,7 @@ handle_toplevel_manager_toplevel(void *data,
 		struct zwlr_foreign_toplevel_handle_v1 *handle)
 {
 	struct panel *panel = data;
-	struct toplevel *toplevel = calloc(1, sizeof(*toplevel));
-	if (!toplevel) {
-		perror("calloc");
-		return;
-	}
+	struct toplevel *toplevel = znew(*toplevel);
 	toplevel->handle = handle;
 	toplevel->panel = panel;
 	wl_list_init(&toplevel->base.link);

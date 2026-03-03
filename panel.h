@@ -134,6 +134,11 @@ struct panel {
 	struct pollfd pollfds[NR_FDS];
 };
 
+
+void die_if_null(void *ptr);
+void *xzalloc(size_t size);
+#define znew(expr) ((__typeof__(expr) *)xzalloc(sizeof(expr)))
+
 void render_frame(struct panel *panel);
 
 struct pool_buffer *get_next_buffer(struct wl_shm *shm,
