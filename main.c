@@ -344,14 +344,14 @@ surface_enter(void *data, struct wl_surface *surface, struct wl_output *output)
 	struct panel *panel = data;
 	struct output *panel_output;
 	wl_list_for_each(panel_output, &panel->outputs, link) {
-		if (panel_output->wl_output == output) {
-			wlr_log(WLR_DEBUG, "Surface enter on output %s",
-					panel_output->name);
-			panel->output = panel_output;
-			panel->scale = panel->output->scale;
-			render_frame(panel);
-			break;
+		if (panel_output->wl_output != output) {
+			continue;
 		}
+		wlr_log(WLR_DEBUG, "surface enter on output %s", panel_output->name);
+		panel->output = panel_output;
+		panel->scale = panel->output->scale;
+		render_frame(panel);
+		break;
 	}
 }
 
@@ -388,13 +388,13 @@ update_cursor(struct seat *seat)
 	pointer->cursor_theme = wl_cursor_theme_load(
 		cursor_theme, cursor_size * panel->scale, panel->shm);
 	if (!pointer->cursor_theme) {
-		wlr_log(WLR_ERROR, "Failed to load cursor theme");
+		wlr_log(WLR_ERROR, "failed to load cursor theme");
 		return;
 	}
 	struct wl_cursor *cursor =
 		wl_cursor_theme_get_cursor(pointer->cursor_theme, "default");
 	if (!cursor) {
-		wlr_log(WLR_ERROR, "Failed to get default cursor from theme");
+		wlr_log(WLR_ERROR, "failed to get default cursor from theme");
 		return;
 	}
 	pointer->cursor_image = cursor->images[0];
@@ -705,9 +705,7 @@ panel_setup(struct panel *panel)
 {
 	panel->display = wl_display_connect(NULL);
 	if (!panel->display) {
-		wlr_log(WLR_ERROR, "Unable to connect to the compositor. "
-				"If your compositor is running, check or set the "
-				"WAYLAND_DISPLAY environment variable.");
+		wlr_log(WLR_ERROR, "unable to connect to the compositor");
 		exit(EXIT_FAILURE);
 	}
 
@@ -724,13 +722,13 @@ panel_setup(struct panel *panel)
 
 	/* Second roundtrip to get wl_output properties */
 	if (wl_display_roundtrip(panel->display) < 0) {
-		wlr_log(WLR_ERROR, "Error during outputs init.");
+		wlr_log(WLR_ERROR, "error during outputs init");
 		panel_destroy(panel);
 		exit(EXIT_FAILURE);
 	}
 
 	if (!panel->output && panel->conf->output) {
-		wlr_log(WLR_ERROR, "Output '%s' not found", panel->conf->output);
+		wlr_log(WLR_ERROR, "output '%s' not found", panel->conf->output);
 		panel_destroy(panel);
 		exit(EXIT_FAILURE);
 	}
