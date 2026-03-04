@@ -43,20 +43,37 @@ struct conf {
 #define BUTTON_MAX_WIDTH 200
 
 enum widget_type {
-	WIDGET_TOPLEVEL,
+	/* Plugins */
+	WIDGET_PLUGINS_BEGIN = 0,
+	WIDGET_TASKBAR,
 	WIDGET_CLOCK,
+	WIDGET_PLUGINS_END,
+
+	/* Other */
+	WIDGET_TOPLEVEL,
 };
 
 struct widget_impl {
 	void (*on_left_button_press)(struct widget *widget, struct seat *seat);
 };
 
+/* Base class */
 struct widget {
 	int x;
 	int width;
 	enum widget_type type;
 	const struct widget_impl *impl;
+	struct panel *panel;
 	struct wl_list link; /* panel.widgets */
+};
+
+/* Derived classes */
+struct clock {
+	struct widget base;
+};
+
+struct taskbar {
+	struct widget base;
 };
 
 struct toplevel {
@@ -65,7 +82,7 @@ struct toplevel {
 	char *title;
 	char *app_id;
 	bool active;
-	struct panel *panel;
+	struct panel *panel; // TODO: use the one in the base-class
 	struct wl_list link; /* panel.toplevels */
 };
 
@@ -152,8 +169,10 @@ void get_text_size(cairo_t *cairo, const PangoFontDescription *desc, int *width,
 void cairo_set_source_u32(cairo_t *cairo, uint32_t color);
 
 void plugin_taskbar_init(struct panel *panel);
+void plugin_taskbar_create(struct panel *panel);
 void toplevel_destroy(struct toplevel *toplevel);
 
+void plugin_clock_create(struct panel *panel);
 
 void widget_add(struct panel *panel, int x, int width);
 void widgets_free(struct panel *panel);

@@ -163,3 +163,11 @@ plugin_taskbar_init(struct panel *panel)
 	zwlr_foreign_toplevel_manager_v1_add_listener(panel->toplevel_manager,
 		&toplevel_manager_listener, panel);
 }
+
+void
+plugin_taskbar_create(struct panel *panel)
+{
+	struct taskbar *taskbar = znew(*taskbar);
+	taskbar->base.type = WIDGET_TASKBAR;
+	wl_list_insert(panel->widgets.prev, &taskbar->base.link);
+}

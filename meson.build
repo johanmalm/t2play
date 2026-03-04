@@ -35,6 +35,7 @@ sources = files(
   'util.c',
   'widget.c',
 
+  'plugin-clock.c',
   'plugin-taskbar.c',
 )
 
