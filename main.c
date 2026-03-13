@@ -107,8 +107,8 @@ render_taskbar(cairo_t *cairo, struct panel *panel, int start_x)
 	return x - start_x;
 }
 
-static int
-render_clock(cairo_t *cairo, struct panel *panel, int start_x)
+static void
+clock_update(cairo_t *cairo, struct panel *panel, struct widget *widget)
 {
 	time_t t = time(NULL);
 	struct tm *tm_info = localtime(&t);
@@ -119,13 +119,40 @@ render_clock(cairo_t *cairo, struct panel *panel, int start_x)
 	get_text_size(cairo, panel->conf->font_description,
 		&text_width, &text_height, NULL, 1, false, "%s", buf);
 
-	int width = text_width + 2 * BUTTON_PADDING;
-	widget_add(panel, start_x, width);
+	widget->width = text_width + 2 * BUTTON_PADDING;
 
-	cairo_set_source_u32(cairo, panel->conf->text);
-	cairo_move_to(cairo, start_x + BUTTON_PADDING, (panel->height - text_height) / 2.0);
-	render_text(cairo, panel->conf->font_description, 1, false, "%s", buf);
-	return width;
+	if (widget->surface) {
+		cairo_surface_destroy(widget->surface);
+	}
+	widget->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
+		widget->width, panel->height);
+
+	cairo_t *cr = cairo_create(widget->surface);
+	cairo_set_source_u32(cr, panel->conf->text);
+	cairo_move_to(cr, BUTTON_PADDING, (panel->height - text_height) / 2.0);
+	render_text(cr, panel->conf->font_description, 1, false, "%s", buf);
+	cairo_destroy(cr);
+}
+
+static void
+init_widgets(struct panel *panel)
+{
+	if (!panel->conf->panel_items) {
+		return;
+	}
+	for (const char *p = panel->conf->panel_items; *p; p++) {
+		if (*p == 'T') {
+			plugin_taskbar_create(panel);
+		} else if (*p == 'C') {
+			plugin_clock_create(panel);
+		} else if (*p == 'S') {
+			struct widget *spacer_widget = znew(*spacer_widget);
+			spacer_widget->type = WIDGET_SPACER;
+			wl_list_insert(panel->widgets.prev, &spacer_widget->link);
+		} else {
+			wlr_log(WLR_ERROR, "unknown panel_items code '%c'", *p);
+		}
+	}
 }
 
 static void
@@ -135,18 +162,26 @@ render_to_cairo(cairo_t *cairo, struct panel *panel)
 	cairo_set_source_u32(cairo, panel->conf->background);
 	cairo_paint(cairo);
 
-	// TODO: Try not to free widgets for each frame!!
+	/* Clear per-frame toplevel widgets; they'll be re-added by render_taskbar */
 	widgets_free(panel);
 
-	if (panel->conf->panel_items) {
-		/* Compute spacer width if 'S' is present */
-		int spacer_width = 0;
-		if (strchr(panel->conf->panel_items, 'S')) {
+	/* Compute spacer width if any spacer widget is present */
+	int spacer_width = 0;
+	{
+		struct widget *w;
+		bool has_spacer = false;
+		wl_list_for_each(w, &panel->widgets, link) {
+			if (w->type == WIDGET_SPACER) {
+				has_spacer = true;
+				break;
+			}
+		}
+		if (has_spacer) {
 			int fixed_width = 0;
-			for (const char *p = panel->conf->panel_items; *p; p++) {
-				if (*p == 'T') {
+			wl_list_for_each(w, &panel->widgets, link) {
+				if (w->type == WIDGET_TASKBAR) {
 					fixed_width += taskbar_natural_width(cairo, panel);
-				} else if (*p == 'C') {
+				} else if (w->type == WIDGET_CLOCK) {
 					fixed_width += clock_natural_width(cairo, panel);
 				}
 			}
@@ -155,18 +190,24 @@ render_to_cairo(cairo_t *cairo, struct panel *panel)
 				spacer_width = 0;
 			}
 		}
+	}
 
-		int x = 0;
-		for (const char *p = panel->conf->panel_items; *p; p++) {
-			if (*p == 'T') {
-				x += render_taskbar(cairo, panel, x);
-			} else if (*p == 'C') {
-				x += render_clock(cairo, panel, x);
-			} else if (*p == 'S') {
-				x += spacer_width;
-			} else {
-				wlr_log(WLR_ERROR, "Unknown panel_items code '%c'", *p);
+	int x = 0;
+	struct widget *widget;
+	wl_list_for_each(widget, &panel->widgets, link) {
+		if (widget->type == WIDGET_TASKBAR) {
+			x += render_taskbar(cairo, panel, x);
+		} else if (widget->type == WIDGET_CLOCK) {
+			clock_update(cairo, panel, widget);
+			if (widget->surface) {
+				cairo_save(cairo);
+				cairo_set_source_surface(cairo, widget->surface, x, 0);
+				cairo_paint(cairo);
+				cairo_restore(cairo);
 			}
+			x += widget->width;
+		} else if (widget->type == WIDGET_SPACER) {
+			x += spacer_width;
 		}
 	}
 
@@ -274,6 +315,16 @@ panel_destroy(struct panel *panel)
 	}
 
 	widgets_free(panel);
+
+	/* Free persistent plugin widgets */
+	struct widget *widget, *tmp_widget;
+	wl_list_for_each_safe(widget, tmp_widget, &panel->widgets, link) {
+		wl_list_remove(&widget->link);
+		if (widget->surface) {
+			cairo_surface_destroy(widget->surface);
+		}
+		free(widget);
+	}
 
 	struct toplevel *toplevel, *tmptoplevel;
 	wl_list_for_each_safe(toplevel, tmptoplevel, &panel->toplevels, link) {
@@ -925,6 +976,8 @@ main(int argc, char **argv)
 
 	wlr_log_init(WLR_DEBUG, NULL);
 
+	/* Create persistent plugin widgets before panel_setup */
+	init_widgets(&panel);
 	panel_setup(&panel);
 	panel_run(&panel);
 	panel_destroy(&panel);
