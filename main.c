@@ -64,6 +64,7 @@ clock_natural_width(cairo_t *cairo, struct panel *panel)
 static int
 render_taskbar(cairo_t *cairo, struct panel *panel, int start_x)
 {
+  wlr_log(WLR_ERROR, "%s", __func__);
 	int x = start_x + BUTTON_PADDING;
 	struct toplevel *toplevel;
 	wl_list_for_each(toplevel, &panel->toplevels, link) {
@@ -107,26 +108,6 @@ render_taskbar(cairo_t *cairo, struct panel *panel, int start_x)
 	return x - start_x;
 }
 
-static int
-render_clock(cairo_t *cairo, struct panel *panel, int start_x)
-{
-	time_t t = time(NULL);
-	struct tm *tm_info = localtime(&t);
-	char buf[6]; /* "HH:MM\0" */
-	strftime(buf, sizeof(buf), "%H:%M", tm_info);
-
-	int text_width, text_height;
-	get_text_size(cairo, panel->conf->font_description,
-		&text_width, &text_height, NULL, 1, false, "%s", buf);
-
-	int width = text_width + 2 * BUTTON_PADDING;
-	//widget_add(panel, start_x, width);
-
-	cairo_set_source_u32(cairo, panel->conf->text);
-	cairo_move_to(cairo, start_x + BUTTON_PADDING, (panel->height - text_height) / 2.0);
-	render_text(cairo, panel->conf->font_description, 1, false, "%s", buf);
-	return width;
-}
 
 static void
 init_widgets(struct panel *panel)
@@ -146,8 +127,51 @@ init_widgets(struct panel *panel)
 }
 
 static void
+clock_update(struct panel *panel, struct widget *widget)
+{
+	if (widget->surface) {
+		cairo_surface_destroy(widget->surface);
+	}
+	widget->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
+		 widget->width, 22);
+
+	cairo_t *cairo = cairo_create(widget->surface);
+
+	time_t t = time(NULL);
+	struct tm *tm_info = localtime(&t);
+	char buf[6]; /* "HH:MM\0" */
+	strftime(buf, sizeof(buf), "%H:%M", tm_info);
+
+	int text_width, text_height;
+	get_text_size(cairo, panel->conf->font_description,
+		&text_width, &text_height, NULL, 1, false, "%s", buf);
+	//int width = text_width + 2 * BUTTON_PADDING;
+
+	cairo_set_source_u32(cairo, panel->conf->text);
+	cairo_move_to(cairo, BUTTON_PADDING, text_height / 2.0);
+	render_text(cairo, panel->conf->font_description, 1, false, "%s", buf);
+
+	cairo_destroy(cairo);
+}
+
+static void
+update_widgets(struct panel *panel)
+{
+	struct widget *widget;
+	wl_list_for_each(widget, &panel->widgets, link) {
+		if (widget->type == WIDGET_TASKBAR) {
+			;
+		} else if (widget->type == WIDGET_CLOCK) {
+			clock_update(panel, widget);
+		}
+	}
+
+}
+
+static void
 render_to_cairo(cairo_t *cairo, struct panel *panel)
 {
+  wlr_log(WLR_ERROR, "render_to_cairo");
 	cairo_set_operator(cairo, CAIRO_OPERATOR_SOURCE);
 	cairo_set_source_u32(cairo, panel->conf->background);
 	cairo_paint(cairo);
@@ -158,9 +182,15 @@ render_to_cairo(cairo_t *cairo, struct panel *panel)
 	wl_list_for_each(widget, &panel->widgets, link) {
 		int x = 0;
 		if (widget->type == WIDGET_TASKBAR) {
-			x += render_taskbar(cairo, panel, x);
+//			x += render_taskbar(cairo, panel, x);
 		} else if (widget->type == WIDGET_CLOCK) {
-			x += render_clock(cairo, panel, x);
+      wlr_log(WLR_ERROR, "render clock (%p)", widget->surface);
+			// TODO: remove render clock
+			//x += render_clock(cairo, panel, x);
+			cairo_save(cairo);
+			cairo_set_source_surface(cairo, widget->surface, 0, 0);
+			cairo_paint_with_alpha(cairo, 0.5);
+			cairo_restore(cairo);
 		}
 	}
 
@@ -176,6 +206,8 @@ render_frame(struct panel *panel)
 		return;
 	}
 
+	wlr_log(WLR_ERROR, "render_frame()");
+
 	cairo_surface_t *recorder = cairo_recording_surface_create(
 			CAIRO_CONTENT_COLOR_ALPHA, NULL);
 	cairo_t *cairo = cairo_create(recorder);
@@ -186,6 +218,7 @@ render_frame(struct panel *panel)
 	cairo_restore(cairo);
 	render_to_cairo(cairo, panel);
 
+	// TODO: move this higher up to avoid the cleanup label
 	panel->current_buffer = get_next_buffer(panel->shm, panel->buffers,
 		panel->width * panel->scale, panel->height * panel->scale);
 	if (!panel->current_buffer) {
@@ -920,8 +953,8 @@ main(int argc, char **argv)
 
 	/* Load plugins */
 	init_widgets(&panel);
-
 	panel_setup(&panel);
+	update_widgets(&panel);
 	panel_run(&panel);
 	panel_destroy(&panel);
 

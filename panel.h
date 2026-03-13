@@ -62,6 +62,7 @@ struct widget {
 	int x;
 	int width;
 	enum widget_type type;
+	cairo_surface_t *surface;
 	const struct widget_impl *impl;
 	struct panel *panel;
 	struct wl_list link; /* panel.widgets */
