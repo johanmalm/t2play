@@ -36,6 +36,7 @@ sources = files(
   'widget.c',
 
   'plugin-clock.c',
+  'plugin-startmenu.c',
   'plugin-taskbar.c',
 )
 

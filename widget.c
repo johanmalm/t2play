@@ -16,6 +16,8 @@ widget_type(enum widget_type type)
 {
 	if (type == WIDGET_CLOCK)
 		return "clock";
+	if (type == WIDGET_STARTMENU)
+		return "startmenu";
 	if (type == WIDGET_TASKBAR)
 		return "taskbar";
 	if (type == WIDGET_TOPLEVEL)
@@ -57,6 +59,10 @@ widgets_free(struct panel *panel)
 			struct toplevel *toplevel =
 				toplevel_from_widget(widget);
 			toplevel_destroy(toplevel);
+		} else if (widget->type == WIDGET_STARTMENU) {
+			struct startmenu *menu =
+				(struct startmenu *)widget;
+			plugin_startmenu_destroy(menu);
 		} else {
 			widget_destroy(widget);
 		}
