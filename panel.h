@@ -47,11 +47,10 @@ enum widget_type {
 	WIDGET_PLUGINS_BEGIN = 0,
 	WIDGET_TASKBAR,
 	WIDGET_CLOCK,
-	WIDGET_SPACER,
 	WIDGET_PLUGINS_END,
 
 	/* Other */
-	WIDGET_TOPLEVEL,
+	WIDGET_TOPLEVEL, /* Child of taskbar plugin */
 };
 
 struct widget_impl {
@@ -84,8 +83,6 @@ struct toplevel {
 	char *title;
 	char *app_id;
 	bool active;
-	struct panel *panel; /* TODO: use the one in the base-class */
-	struct wl_list link; /* panel.toplevels */
 };
 
 struct pointer {
@@ -139,7 +136,6 @@ struct panel {
 	struct wl_surface *surface;
 
 	struct zwlr_foreign_toplevel_manager_v1 *toplevel_manager;
-	struct wl_list toplevels; /* struct toplevel.link */
 	struct wl_list widgets; /* struct widget.link */
 
 	uint32_t width;
@@ -153,7 +149,6 @@ struct panel {
 	struct pollfd pollfds[NR_FDS];
 };
 
-
 void die_if_null(void *ptr);
 void *xzalloc(size_t size);
 #define znew(expr) ((__typeof__(expr) *)xzalloc(sizeof(expr)))
@@ -161,22 +156,27 @@ void *xzalloc(size_t size);
 void render_frame(struct panel *panel);
 
 struct pool_buffer *get_next_buffer(struct wl_shm *shm,
-		struct pool_buffer pool[static 2], uint32_t width, uint32_t height);
+	struct pool_buffer pool[static 2], uint32_t width, uint32_t height);
 void destroy_buffer(struct pool_buffer *buffer);
 
 void render_text(cairo_t *cairo, const PangoFontDescription *desc, double scale,
 	bool markup, const char *fmt, ...);
-void get_text_size(cairo_t *cairo, const PangoFontDescription *desc, int *width,
-	int *height, int *baseline, double scale, bool markup, const char *fmt, ...);
+PangoRectangle get_text_size(const PangoFontDescription *desc,
+	const char *string);
 void cairo_set_source_u32(cairo_t *cairo, uint32_t color);
 
 void plugin_taskbar_init(struct panel *panel);
 void plugin_taskbar_create(struct panel *panel);
 void toplevel_destroy(struct toplevel *toplevel);
+struct toplevel *toplevel_from_widget(struct widget *widget);
 
+void plugin_clock_update(struct panel *panel);
 void plugin_clock_create(struct panel *panel);
 
-void widgets_free(struct panel *panel);
 void widget_on_left_button_press(struct widget *widget, struct seat *seat);
+char *widget_type(enum widget_type type);
+bool widget_is_plugin(struct widget *widget);
+void widget_free(struct widget *widget);
+void widgets_free(struct panel *panel);
 
 #endif /* PANEL_H */

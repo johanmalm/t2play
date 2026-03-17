@@ -19,7 +19,8 @@
 #include <wayland-client.h>
 #include "panel.h"
 
-static int anonymous_shm_open(void)
+static int
+anonymous_shm_open(void)
 {
 	int retries = 100;
 
@@ -29,8 +30,8 @@ static int anonymous_shm_open(void)
 		clock_gettime(CLOCK_MONOTONIC, &ts);
 		pid_t pid = getpid();
 		char name[50];
-		snprintf(name, sizeof(name), "/t2play-%x-%x",
-			(unsigned int)pid, (unsigned int)ts.tv_nsec);
+		snprintf(name, sizeof(name), "/t2play-%x-%x", (unsigned int)pid,
+			(unsigned int)ts.tv_nsec);
 
 		// shm_open guarantees that O_CLOEXEC is set
 		int fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
@@ -45,19 +46,19 @@ static int anonymous_shm_open(void)
 	return -1;
 }
 
-static void buffer_release(void *data, struct wl_buffer *wl_buffer)
+static void
+buffer_release(void *data, struct wl_buffer *wl_buffer)
 {
 	struct pool_buffer *buffer = data;
 	buffer->busy = false;
 }
 
 static const struct wl_buffer_listener buffer_listener = {
-	.release = buffer_release
-};
+	.release = buffer_release};
 
-static struct pool_buffer *create_buffer(struct wl_shm *shm,
-		struct pool_buffer *buf, int32_t width, int32_t height,
-		uint32_t format)
+static struct pool_buffer *
+create_buffer(struct wl_shm *shm, struct pool_buffer *buf, int32_t width,
+	int32_t height, uint32_t format)
 {
 	uint32_t stride = width * 4;
 	size_t size = stride * height;
@@ -70,10 +71,11 @@ static struct pool_buffer *create_buffer(struct wl_shm *shm,
 		close(fd);
 		return NULL;
 	}
-	void *data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	void *data =
+		mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
-	buf->buffer = wl_shm_pool_create_buffer(pool, 0,
-			width, height, stride, format);
+	buf->buffer = wl_shm_pool_create_buffer(pool, 0, width, height, stride,
+		format);
 	wl_shm_pool_destroy(pool);
 	close(fd);
 
@@ -82,7 +84,7 @@ static struct pool_buffer *create_buffer(struct wl_shm *shm,
 	buf->height = height;
 	buf->data = data;
 	buf->surface = cairo_image_surface_create_for_data(data,
-			CAIRO_FORMAT_ARGB32, width, height, stride);
+		CAIRO_FORMAT_ARGB32, width, height, stride);
 	buf->cairo = cairo_create(buf->surface);
 	buf->pango = pango_cairo_create_context(buf->cairo);
 
@@ -90,7 +92,8 @@ static struct pool_buffer *create_buffer(struct wl_shm *shm,
 	return buf;
 }
 
-void destroy_buffer(struct pool_buffer *buffer)
+void
+destroy_buffer(struct pool_buffer *buffer)
 {
 	if (buffer->buffer) {
 		wl_buffer_destroy(buffer->buffer);
@@ -114,8 +117,9 @@ void destroy_buffer(struct pool_buffer *buffer)
 	}
 }
 
-struct pool_buffer *get_next_buffer(struct wl_shm *shm,
-		struct pool_buffer pool[static 2], uint32_t width, uint32_t height)
+struct pool_buffer *
+get_next_buffer(struct wl_shm *shm, struct pool_buffer pool[static 2],
+	uint32_t width, uint32_t height)
 {
 	struct pool_buffer *buffer = NULL;
 
@@ -136,7 +140,7 @@ struct pool_buffer *get_next_buffer(struct wl_shm *shm,
 
 	if (!buffer->buffer) {
 		if (!create_buffer(shm, buffer, width, height,
-					WL_SHM_FORMAT_ARGB8888)) {
+			    WL_SHM_FORMAT_ARGB8888)) {
 			return NULL;
 		}
 	}

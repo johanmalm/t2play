@@ -1,20 +1,22 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #define _POSIX_C_SOURCE 200809L
-#include "panel.h"
 #include <assert.h>
 #include <cairo.h>
-#include <ctype.h>
 #include <getopt.h>
 #include <glib.h>
 #include <limits.h>
 #include <pango/pangocairo.h>
-#include <stdio.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
+#include <wayland-util.h>
+#include "panel.h"
 #ifdef __FreeBSD__
 #include <sys/event.h> /* For signalfd() */
 #endif
+#include <cyaml/cyaml.h>
 #include <sys/signalfd.h>
 #include <sys/stat.h>
 #include <sys/timerfd.h>
@@ -24,118 +26,12 @@
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <wlr/util/log.h>
-#include <cyaml/cyaml.h>
 #include "cursor-shape-v1-client-protocol.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 
-static int
-taskbar_natural_width(cairo_t *cairo, struct panel *panel)
-{
-	int total = BUTTON_PADDING;
-	struct toplevel *toplevel;
-	wl_list_for_each(toplevel, &panel->toplevels, link) {
-		const char *label = toplevel->title ? toplevel->title
-			: (toplevel->app_id ? toplevel->app_id : "?");
-		int text_width, text_height;
-		get_text_size(cairo, panel->conf->font_description,
-			&text_width, &text_height, NULL, 1, false, "%s", label);
-		int btn_width = text_width + 2 * BUTTON_PADDING;
-		if (btn_width > BUTTON_MAX_WIDTH) {
-			btn_width = BUTTON_MAX_WIDTH;
-		}
-		total += btn_width + BUTTON_PADDING;
-	}
-	return total;
-}
-
-static int
-clock_natural_width(cairo_t *cairo, struct panel *panel)
-{
-	char buf[6]; /* "HH:MM\0" */
-	time_t t = time(NULL);
-	strftime(buf, sizeof(buf), "%H:%M", localtime(&t));
-	int text_width, text_height;
-	get_text_size(cairo, panel->conf->font_description,
-		&text_width, &text_height, NULL, 1, false, "%s", buf);
-	return text_width + 2 * BUTTON_PADDING;
-}
-
-static int
-render_taskbar(cairo_t *cairo, struct panel *panel, int start_x)
-{
-	int x = start_x + BUTTON_PADDING;
-	struct toplevel *toplevel;
-	wl_list_for_each(toplevel, &panel->toplevels, link) {
-		const char *label = toplevel->title ? toplevel->title
-			: (toplevel->app_id ? toplevel->app_id : "?");
-
-		int text_width, text_height;
-		get_text_size(cairo, panel->conf->font_description,
-			&text_width, &text_height, NULL, 1, false, "%s", label);
-
-		int btn_width = text_width + 2 * BUTTON_PADDING;
-		if (btn_width > BUTTON_MAX_WIDTH) {
-			btn_width = BUTTON_MAX_WIDTH;
-		}
-
-		toplevel->base.x = x;
-		toplevel->base.width = btn_width;
-		wl_list_insert(panel->widgets.prev, &toplevel->base.link);
-
-		/* Draw button background */
-		if (toplevel->active) {
-			cairo_set_source_u32(cairo, panel->conf->button_active);
-		} else {
-			cairo_set_source_u32(cairo, panel->conf->button_background);
-		}
-		cairo_rectangle(cairo, x, 2, btn_width, panel->height - 4);
-		cairo_fill(cairo);
-
-		/* Draw button label, clipped to button width */
-		cairo_save(cairo);
-		cairo_rectangle(cairo, x + BUTTON_PADDING, 0, btn_width - 2 * BUTTON_PADDING, panel->height);
-		cairo_clip(cairo);
-		cairo_set_source_u32(cairo, panel->conf->text);
-		cairo_move_to(cairo, x + BUTTON_PADDING,
-			(panel->height - text_height) / 2);
-		render_text(cairo, panel->conf->font_description, 1, false, "%s", label);
-		cairo_restore(cairo);
-
-		x += btn_width + BUTTON_PADDING;
-	}
-	return x - start_x;
-}
-
 static void
-clock_update(cairo_t *cairo, struct panel *panel, struct widget *widget)
-{
-	time_t t = time(NULL);
-	struct tm *tm_info = localtime(&t);
-	char buf[6]; /* "HH:MM\0" */
-	strftime(buf, sizeof(buf), "%H:%M", tm_info);
-
-	int text_width, text_height;
-	get_text_size(cairo, panel->conf->font_description,
-		&text_width, &text_height, NULL, 1, false, "%s", buf);
-
-	widget->width = text_width + 2 * BUTTON_PADDING;
-
-	if (widget->surface) {
-		cairo_surface_destroy(widget->surface);
-	}
-	widget->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-		widget->width, panel->height);
-
-	cairo_t *cr = cairo_create(widget->surface);
-	cairo_set_source_u32(cr, panel->conf->text);
-	cairo_move_to(cr, BUTTON_PADDING, (panel->height - text_height) / 2.0);
-	render_text(cr, panel->conf->font_description, 1, false, "%s", buf);
-	cairo_destroy(cr);
-}
-
-static void
-init_widgets(struct panel *panel)
+init_plugins(struct panel *panel)
 {
 	if (!panel->conf->panel_items) {
 		return;
@@ -145,10 +41,6 @@ init_widgets(struct panel *panel)
 			plugin_taskbar_create(panel);
 		} else if (*p == 'C') {
 			plugin_clock_create(panel);
-		} else if (*p == 'S') {
-			struct widget *spacer_widget = znew(*spacer_widget);
-			spacer_widget->type = WIDGET_SPACER;
-			wl_list_insert(panel->widgets.prev, &spacer_widget->link);
 		} else {
 			wlr_log(WLR_ERROR, "unknown panel_items code '%c'", *p);
 		}
@@ -156,64 +48,92 @@ init_widgets(struct panel *panel)
 }
 
 static void
-render_to_cairo(cairo_t *cairo, struct panel *panel)
+update_widget_positions(struct panel *panel)
 {
+	struct widget *widget, *taskbar = NULL;
+
+	/* Start by working out the width of the taskbar (the expandable widget)
+	 */
+	wl_list_for_each(widget, &panel->widgets, link) {
+		if (widget->type == WIDGET_TASKBAR) {
+			taskbar = widget;
+			break;
+		}
+	}
+
+	if (taskbar) {
+		int width_left_for_expandable_widget = panel->width;
+		wl_list_for_each(widget, &panel->widgets, link) {
+			if (!widget_is_plugin(widget)) {
+				continue;
+			}
+			/* For the time being, only the taskbar can be
+			 * expandable */
+			if (widget == taskbar) {
+				continue;
+			}
+			width_left_for_expandable_widget -= widget->width;
+		}
+		taskbar->width = width_left_for_expandable_widget;
+	}
+
+	/* Set plugin x-positions */
+	int x = 0;
+	wl_list_for_each(widget, &panel->widgets, link) {
+		if (!widget_is_plugin(widget)) {
+			continue;
+		}
+		widget->x = x;
+		x += widget->width;
+	}
+
+	/* Set taskbar toplevel x-positions */
+	if (taskbar) {
+
+		// TODO: Set toplevel widths more intelligently
+
+		x = taskbar->x;
+		wl_list_for_each(widget, &panel->widgets, link) {
+			if (widget->type != WIDGET_TOPLEVEL) {
+				continue;
+			}
+			widget->x = x;
+			x += widget->width;
+		}
+	}
+}
+
+static void
+render_panel(cairo_t *cairo, struct panel *panel)
+{
+	// TODO: Create a taskbar->base.surface for this instead
+	/* Draw background */
+	cairo_save(cairo);
 	cairo_set_operator(cairo, CAIRO_OPERATOR_SOURCE);
 	cairo_set_source_u32(cairo, panel->conf->background);
 	cairo_paint(cairo);
+	cairo_restore(cairo);
 
-	/* Clear per-frame toplevel widgets; they'll be re-added by render_taskbar */
-	widgets_free(panel);
-
-	/* Compute spacer width if any spacer widget is present */
-	int spacer_width = 0;
-	{
-		struct widget *w;
-		bool has_spacer = false;
-		wl_list_for_each(w, &panel->widgets, link) {
-			if (w->type == WIDGET_SPACER) {
-				has_spacer = true;
-				break;
-			}
-		}
-		if (has_spacer) {
-			int fixed_width = 0;
-			wl_list_for_each(w, &panel->widgets, link) {
-				if (w->type == WIDGET_TASKBAR) {
-					fixed_width += taskbar_natural_width(cairo, panel);
-				} else if (w->type == WIDGET_CLOCK) {
-					fixed_width += clock_natural_width(cairo, panel);
-				}
-			}
-			spacer_width = (int)panel->width - fixed_width;
-			if (spacer_width < 0) {
-				spacer_width = 0;
-			}
-		}
-	}
-
-	int x = 0;
+	/* Render all widgets */
 	struct widget *widget;
 	wl_list_for_each(widget, &panel->widgets, link) {
-		if (widget->type == WIDGET_TASKBAR) {
-			x += render_taskbar(cairo, panel, x);
-		} else if (widget->type == WIDGET_CLOCK) {
-			clock_update(cairo, panel, widget);
-			if (widget->surface) {
-				cairo_save(cairo);
-				cairo_set_source_surface(cairo, widget->surface, x, 0);
-				cairo_paint(cairo);
-				cairo_restore(cairo);
-			}
-			x += widget->width;
-		} else if (widget->type == WIDGET_SPACER) {
-			x += spacer_width;
+		if (!widget->surface) {
+			wlr_log(WLR_DEBUG, "no wiget surface for %s",
+				widget_type(widget->type));
+			continue;
 		}
+		cairo_save(cairo);
+		cairo_set_source_surface(cairo, widget->surface, widget->x, 0);
+		cairo_paint(cairo);
+		cairo_restore(cairo);
 	}
 
+	/* Draw border */
+	cairo_save(cairo);
 	cairo_set_source_u32(cairo, panel->conf->text);
-	cairo_rectangle(cairo, 0, panel->height, panel->width, 1);
-	cairo_fill(cairo);
+	cairo_rectangle(cairo, 0, 0, panel->width, panel->height);
+	cairo_stroke(cairo);
+	cairo_restore(cairo);
 }
 
 void
@@ -223,15 +143,17 @@ render_frame(struct panel *panel)
 		return;
 	}
 
-	cairo_surface_t *recorder = cairo_recording_surface_create(
-			CAIRO_CONTENT_COLOR_ALPHA, NULL);
-	cairo_t *cairo = cairo_create(recorder);
+	cairo_surface_t *surface =
+		cairo_recording_surface_create(CAIRO_CONTENT_COLOR_ALPHA, NULL);
+	cairo_t *cairo = cairo_create(surface);
 	cairo_scale(cairo, panel->scale, panel->scale);
 	cairo_save(cairo);
 	cairo_set_operator(cairo, CAIRO_OPERATOR_CLEAR);
 	cairo_paint(cairo);
 	cairo_restore(cairo);
-	render_to_cairo(cairo, panel);
+
+	update_widget_positions(panel);
+	render_panel(cairo, panel);
 
 	panel->current_buffer = get_next_buffer(panel->shm, panel->buffers,
 		panel->width * panel->scale, panel->height * panel->scale);
@@ -244,7 +166,7 @@ render_frame(struct panel *panel)
 	cairo_set_operator(shm, CAIRO_OPERATOR_CLEAR);
 	cairo_paint(shm);
 	cairo_restore(shm);
-	cairo_set_source_surface(shm, recorder, 0.0, 0.0);
+	cairo_set_source_surface(shm, surface, 0.0, 0.0);
 	cairo_paint(shm);
 
 	wl_surface_set_buffer_scale(panel->surface, panel->scale);
@@ -254,7 +176,7 @@ render_frame(struct panel *panel)
 	wl_display_roundtrip(panel->display);
 
 cleanup:
-	cairo_surface_destroy(recorder);
+	cairo_surface_destroy(surface);
 	cairo_destroy(cairo);
 }
 
@@ -316,23 +238,9 @@ panel_destroy(struct panel *panel)
 
 	widgets_free(panel);
 
-	/* Free persistent plugin widgets */
-	struct widget *widget, *tmp_widget;
-	wl_list_for_each_safe(widget, tmp_widget, &panel->widgets, link) {
-		wl_list_remove(&widget->link);
-		if (widget->surface) {
-			cairo_surface_destroy(widget->surface);
-		}
-		free(widget);
-	}
-
-	struct toplevel *toplevel, *tmptoplevel;
-	wl_list_for_each_safe(toplevel, tmptoplevel, &panel->toplevels, link) {
-		toplevel_destroy(toplevel);
-	}
-
 	if (panel->toplevel_manager) {
-		zwlr_foreign_toplevel_manager_v1_destroy(panel->toplevel_manager);
+		zwlr_foreign_toplevel_manager_v1_destroy(
+			panel->toplevel_manager);
 		panel->toplevel_manager = NULL;
 	}
 
@@ -368,7 +276,7 @@ panel_destroy(struct panel *panel)
 
 static void
 layer_surface_configure(void *data, struct zwlr_layer_surface_v1 *surface,
-		uint32_t serial, uint32_t width, uint32_t height)
+	uint32_t serial, uint32_t width, uint32_t height)
 {
 	struct panel *panel = data;
 	panel->width = width;
@@ -398,7 +306,8 @@ surface_enter(void *data, struct wl_surface *surface, struct wl_output *output)
 		if (panel_output->wl_output != output) {
 			continue;
 		}
-		wlr_log(WLR_DEBUG, "surface enter on output %s", panel_output->name);
+		wlr_log(WLR_DEBUG, "surface enter on output %s",
+			panel_output->name);
 		panel->output = panel_output;
 		panel->scale = panel->output->scale;
 		render_frame(panel);
@@ -407,7 +316,8 @@ surface_enter(void *data, struct wl_surface *surface, struct wl_output *output)
 }
 
 static void
-surface_leave(void *data, struct wl_surface *wl_surface, struct wl_output *output)
+surface_leave(void *data, struct wl_surface *wl_surface,
+	struct wl_output *output)
 {
 	/* nop */
 }
@@ -436,8 +346,8 @@ update_cursor(struct seat *seat)
 			cursor_size = size;
 		}
 	}
-	pointer->cursor_theme = wl_cursor_theme_load(
-		cursor_theme, cursor_size * panel->scale, panel->shm);
+	pointer->cursor_theme = wl_cursor_theme_load(cursor_theme,
+		cursor_size * panel->scale, panel->shm);
 	if (!pointer->cursor_theme) {
 		wlr_log(WLR_ERROR, "failed to load cursor theme");
 		return;
@@ -449,16 +359,15 @@ update_cursor(struct seat *seat)
 		return;
 	}
 	pointer->cursor_image = cursor->images[0];
-	wl_surface_set_buffer_scale(pointer->cursor_surface,
-			panel->scale);
+	wl_surface_set_buffer_scale(pointer->cursor_surface, panel->scale);
 	wl_surface_attach(pointer->cursor_surface,
-			wl_cursor_image_get_buffer(pointer->cursor_image), 0, 0);
+		wl_cursor_image_get_buffer(pointer->cursor_image), 0, 0);
 	wl_pointer_set_cursor(pointer->pointer, pointer->serial,
-			pointer->cursor_surface,
-			pointer->cursor_image->hotspot_x / panel->scale,
-			pointer->cursor_image->hotspot_y / panel->scale);
-	wl_surface_damage_buffer(pointer->cursor_surface, 0, 0,
-			INT32_MAX, INT32_MAX);
+		pointer->cursor_surface,
+		pointer->cursor_image->hotspot_x / panel->scale,
+		pointer->cursor_image->hotspot_y / panel->scale);
+	wl_surface_damage_buffer(pointer->cursor_surface, 0, 0, INT32_MAX,
+		INT32_MAX);
 	wl_surface_commit(pointer->cursor_surface);
 }
 
@@ -475,8 +384,7 @@ update_all_cursors(struct panel *panel)
 
 static void
 wl_pointer_enter(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
-		struct wl_surface *surface, wl_fixed_t surface_x,
-		wl_fixed_t surface_y)
+	struct wl_surface *surface, wl_fixed_t surface_x, wl_fixed_t surface_y)
 {
 	struct seat *seat = data;
 
@@ -498,15 +406,15 @@ wl_pointer_enter(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 }
 
 static void
-wl_pointer_leave(void *data, struct wl_pointer *wl_pointer,
-		uint32_t serial, struct wl_surface *surface)
+wl_pointer_leave(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
+	struct wl_surface *surface)
 {
 	/* nop */
 }
 
 static void
 wl_pointer_motion(void *data, struct wl_pointer *wl_pointer, uint32_t time,
-		wl_fixed_t surface_x, wl_fixed_t surface_y)
+	wl_fixed_t surface_x, wl_fixed_t surface_y)
 {
 	struct seat *seat = data;
 	seat->pointer.x = wl_fixed_to_int(surface_x);
@@ -515,7 +423,7 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer, uint32_t time,
 
 static void
 wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
-		uint32_t time, uint32_t button, uint32_t state)
+	uint32_t time, uint32_t button, uint32_t state)
 {
 	struct seat *seat = data;
 	struct panel *panel = seat->panel;
@@ -527,7 +435,7 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 	int x = seat->pointer.x;
 
 	struct widget *widget;
-	wl_list_for_each(widget, &panel->widgets, link) {
+	wl_list_for_each_reverse(widget, &panel->widgets, link) {
 		if (x >= widget->x && x < widget->x + widget->width) {
 			widget_on_left_button_press(widget, seat);
 			break;
@@ -537,7 +445,7 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 
 static void
 wl_pointer_axis(void *data, struct wl_pointer *wl_pointer, uint32_t time,
-		uint32_t axis, wl_fixed_t value)
+	uint32_t axis, wl_fixed_t value)
 {
 	/* nop */
 }
@@ -550,21 +458,21 @@ wl_pointer_frame(void *data, struct wl_pointer *wl_pointer)
 
 static void
 wl_pointer_axis_source(void *data, struct wl_pointer *wl_pointer,
-		uint32_t axis_source)
+	uint32_t axis_source)
 {
 	/* nop */
 }
 
 static void
-wl_pointer_axis_stop(void *data, struct wl_pointer *wl_pointer,
-		uint32_t time, uint32_t axis)
+wl_pointer_axis_stop(void *data, struct wl_pointer *wl_pointer, uint32_t time,
+	uint32_t axis)
 {
 	/* nop */
 }
 
 static void
 wl_pointer_axis_discrete(void *data, struct wl_pointer *wl_pointer,
-		uint32_t axis, int32_t discrete)
+	uint32_t axis, int32_t discrete)
 {
 	/* nop */
 }
@@ -583,14 +491,14 @@ static const struct wl_pointer_listener pointer_listener = {
 
 static void
 seat_handle_capabilities(void *data, struct wl_seat *wl_seat,
-		enum wl_seat_capability caps)
+	enum wl_seat_capability caps)
 {
 	struct seat *seat = data;
 	bool cap_pointer = caps & WL_SEAT_CAPABILITY_POINTER;
 	if (cap_pointer && !seat->pointer.pointer) {
 		seat->pointer.pointer = wl_seat_get_pointer(wl_seat);
 		wl_pointer_add_listener(seat->pointer.pointer,
-				&pointer_listener, seat);
+			&pointer_listener, seat);
 	} else if (!cap_pointer && seat->pointer.pointer) {
 		wl_pointer_destroy(seat->pointer.pointer);
 		seat->pointer.pointer = NULL;
@@ -610,16 +518,15 @@ static const struct wl_seat_listener seat_listener = {
 
 static void
 output_geometry(void *data, struct wl_output *wl_output, int32_t x, int32_t y,
-		int32_t physical_width, int32_t physical_height,
-		int32_t subpixel, const char *make, const char *model,
-		int32_t transform)
+	int32_t physical_width, int32_t physical_height, int32_t subpixel,
+	const char *make, const char *model, int32_t transform)
 {
 	/* nop */
 }
 
 static void
 output_mode(void *data, struct wl_output *wl_output, uint32_t flags,
-		int32_t width, int32_t height, int32_t refresh)
+	int32_t width, int32_t height, int32_t refresh)
 {
 	/* nop */
 }
@@ -651,8 +558,8 @@ output_name(void *data, struct wl_output *output, const char *name)
 	panel_output->name = strdup(name);
 
 	const char *outname = panel_output->panel->conf->output;
-	if (!panel_output->panel->output && outname &&
-			strcmp(outname, name) == 0) {
+	if (!panel_output->panel->output && outname
+		&& strcmp(outname, name) == 0) {
 		wlr_log(WLR_DEBUG, "Using output %s", name);
 		panel_output->panel->output = panel_output;
 	}
@@ -660,7 +567,7 @@ output_name(void *data, struct wl_output *output, const char *name)
 
 static void
 output_description(void *data, struct wl_output *wl_output,
-		const char *description)
+	const char *description)
 {
 	/* nop */
 }
@@ -676,21 +583,23 @@ static const struct wl_output_listener output_listener = {
 
 static void
 handle_global(void *data, struct wl_registry *registry, uint32_t name,
-		const char *interface, uint32_t version)
+	const char *interface, uint32_t version)
 {
 	struct panel *panel = data;
 	if (strcmp(interface, wl_compositor_interface.name) == 0) {
 		panel->compositor = wl_registry_bind(registry, name,
-				&wl_compositor_interface, 4);
+			&wl_compositor_interface, 4);
 	} else if (strcmp(interface, wl_seat_interface.name) == 0) {
 		struct seat *seat = znew(*seat);
 		seat->panel = panel;
 		seat->wl_name = name;
-		seat->wl_seat = wl_registry_bind(registry, name, &wl_seat_interface, 5);
+		seat->wl_seat =
+			wl_registry_bind(registry, name, &wl_seat_interface, 5);
 		wl_seat_add_listener(seat->wl_seat, &seat_listener, seat);
 		wl_list_insert(&panel->seats, &seat->link);
 	} else if (strcmp(interface, wl_shm_interface.name) == 0) {
-		panel->shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
+		panel->shm =
+			wl_registry_bind(registry, name, &wl_shm_interface, 1);
 	} else if (strcmp(interface, wl_output_interface.name) == 0) {
 		if (!panel->output) {
 			struct output *output = znew(*output);
@@ -700,18 +609,21 @@ handle_global(void *data, struct wl_registry *registry, uint32_t name,
 			output->scale = 1;
 			output->panel = panel;
 			wl_list_insert(&panel->outputs, &output->link);
-			wl_output_add_listener(output->wl_output, &output_listener, output);
+			wl_output_add_listener(output->wl_output,
+				&output_listener, output);
 		}
 	} else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
-		panel->layer_shell = wl_registry_bind(
-				registry, name, &zwlr_layer_shell_v1_interface, 1);
-	} else if (strcmp(interface, wp_cursor_shape_manager_v1_interface.name) == 0) {
-		panel->cursor_shape_manager = wl_registry_bind(
-				registry, name, &wp_cursor_shape_manager_v1_interface, 1);
+		panel->layer_shell = wl_registry_bind(registry, name,
+			&zwlr_layer_shell_v1_interface, 1);
+	} else if (strcmp(interface, wp_cursor_shape_manager_v1_interface.name)
+		== 0) {
+		panel->cursor_shape_manager = wl_registry_bind(registry, name,
+			&wp_cursor_shape_manager_v1_interface, 1);
 	} else if (strcmp(interface,
-			zwlr_foreign_toplevel_manager_v1_interface.name) == 0) {
+			   zwlr_foreign_toplevel_manager_v1_interface.name)
+		== 0) {
 		panel->toplevel_manager = wl_registry_bind(registry, name,
-				&zwlr_foreign_toplevel_manager_v1_interface, 3);
+			&zwlr_foreign_toplevel_manager_v1_interface, 3);
 		plugin_taskbar_init(panel);
 	}
 }
@@ -765,7 +677,8 @@ panel_setup(struct panel *panel)
 	struct wl_registry *registry = wl_display_get_registry(panel->display);
 	wl_registry_add_listener(registry, &registry_listener, panel);
 	if (wl_display_roundtrip(panel->display) < 0) {
-		wlr_log(WLR_ERROR, "failed to register with the wayland display");
+		wlr_log(WLR_ERROR,
+			"failed to register with the wayland display");
 		exit(EXIT_FAILURE);
 	}
 
@@ -779,7 +692,8 @@ panel_setup(struct panel *panel)
 	}
 
 	if (!panel->output && panel->conf->output) {
-		wlr_log(WLR_ERROR, "output '%s' not found", panel->conf->output);
+		wlr_log(WLR_ERROR, "output '%s' not found",
+			panel->conf->output);
 		panel_destroy(panel);
 		exit(EXIT_FAILURE);
 	}
@@ -792,16 +706,16 @@ panel_setup(struct panel *panel)
 	assert(panel->surface);
 	wl_surface_add_listener(panel->surface, &surface_listener, panel);
 
-	panel->layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-			panel->layer_shell, panel->surface,
+	panel->layer_surface =
+		zwlr_layer_shell_v1_get_layer_surface(panel->layer_shell,
+			panel->surface,
 			panel->output ? panel->output->wl_output : NULL,
-			panel->conf->layer,
-			"t2play");
+			panel->conf->layer, "t2play");
 	assert(panel->layer_surface);
 	zwlr_layer_surface_v1_add_listener(panel->layer_surface,
-			&layer_surface_listener, panel);
+		&layer_surface_listener, panel);
 	zwlr_layer_surface_v1_set_anchor(panel->layer_surface,
-			panel->conf->anchors);
+		panel->conf->anchors);
 
 	wl_registry_destroy(registry);
 
@@ -809,17 +723,19 @@ panel_setup(struct panel *panel)
 	panel->pollfds[FD_WAYLAND].events = POLLIN;
 
 	if (panel->conf->panel_items && strchr(panel->conf->panel_items, 'C')) {
-		panel->pollfds[FD_CLOCK].fd = timerfd_create(CLOCK_REALTIME, TFD_CLOEXEC);
+		panel->pollfds[FD_CLOCK].fd =
+			timerfd_create(CLOCK_REALTIME, TFD_CLOEXEC);
 		panel->pollfds[FD_CLOCK].events = POLLIN;
-		/* Fire at the start of the next minute, then every 60 seconds */
+		/* Fire at the start of the next minute, then every 60 seconds
+		 */
 		struct timespec now;
 		clock_gettime(CLOCK_REALTIME, &now);
 		struct itimerspec clock_timer = {
 			.it_interval.tv_sec = 60,
 			.it_value.tv_sec = now.tv_sec - (now.tv_sec % 60) + 60,
 		};
-		timerfd_settime(panel->pollfds[FD_CLOCK].fd,
-			TFD_TIMER_ABSTIME, &clock_timer, NULL);
+		timerfd_settime(panel->pollfds[FD_CLOCK].fd, TFD_TIMER_ABSTIME,
+			&clock_timer, NULL);
 	} else {
 		panel->pollfds[FD_CLOCK].fd = -1;
 	}
@@ -829,7 +745,8 @@ panel_setup(struct panel *panel)
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGTERM);
 	sigprocmask(SIG_BLOCK, &mask, NULL);
-	panel->pollfds[FD_SIGNAL].fd = signalfd(-1, &mask, SFD_CLOEXEC | SFD_NONBLOCK);
+	panel->pollfds[FD_SIGNAL].fd =
+		signalfd(-1, &mask, SFD_CLOEXEC | SFD_NONBLOCK);
 	panel->pollfds[FD_SIGNAL].events = POLLIN;
 }
 
@@ -842,6 +759,8 @@ panel_run(struct panel *panel)
 	zwlr_layer_surface_v1_set_exclusive_zone(panel->layer_surface, 30);
 	wl_surface_commit(panel->surface);
 	wl_display_roundtrip(panel->display);
+
+	plugin_clock_update(panel);
 
 	render_frame(panel);
 	while (panel->run_display) {
@@ -870,6 +789,7 @@ panel_run(struct panel *panel)
 		if (panel->pollfds[FD_CLOCK].revents & POLLIN) {
 			uint64_t exp;
 			read(panel->pollfds[FD_CLOCK].fd, &exp, sizeof(exp));
+			plugin_clock_update(panel);
 			render_frame(panel);
 		}
 	}
@@ -882,11 +802,11 @@ struct yaml_conf {
 static const cyaml_schema_field_t yaml_conf_fields[] = {
 	CYAML_FIELD_STRING_PTR("panel_items", CYAML_FLAG_OPTIONAL,
 		struct yaml_conf, panel_items, 0, CYAML_UNLIMITED),
-	CYAML_FIELD_END
-};
+	CYAML_FIELD_END};
 
 static const cyaml_schema_value_t yaml_conf_schema = {
-	CYAML_VALUE_MAPPING(CYAML_FLAG_POINTER, struct yaml_conf, yaml_conf_fields),
+	CYAML_VALUE_MAPPING(CYAML_FLAG_POINTER, struct yaml_conf,
+		yaml_conf_fields),
 };
 
 static const cyaml_config_t yaml_cyaml_config = {
@@ -906,8 +826,8 @@ load_config(struct conf *conf, const char *path)
 		return;
 	}
 	if (err != CYAML_OK) {
-		wlr_log(WLR_ERROR, "Failed to load config '%s': %s",
-			path, cyaml_strerror(err));
+		wlr_log(WLR_ERROR, "Failed to load config '%s': %s", path,
+			cyaml_strerror(err));
 		return;
 	}
 	if (data) {
@@ -923,9 +843,11 @@ load_config(struct conf *conf, const char *path)
 static void
 conf_init(struct conf *conf)
 {
-	conf->font_description = pango_font_description_from_string("pango:Sans 10");
+	conf->font_description =
+		pango_font_description_from_string("pango:Sans 10");
 	conf->anchors = ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP
-		| ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
+		| ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT
+		| ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
 	conf->layer = ZWLR_LAYER_SHELL_V1_LAYER_TOP;
 	conf->background = 0x323232FF;
 	conf->text = 0xFFFFFFFF;
@@ -937,7 +859,7 @@ conf_init(struct conf *conf)
 int
 main(int argc, char **argv)
 {
-	struct conf conf = { 0 };
+	struct conf conf = {0};
 	conf_init(&conf);
 
 	/* Load config file from $XDG_CONFIG_HOME/t2play/config.yaml */
@@ -971,13 +893,12 @@ main(int argc, char **argv)
 
 	wl_list_init(&panel.outputs);
 	wl_list_init(&panel.seats);
-	wl_list_init(&panel.toplevels);
 	wl_list_init(&panel.widgets);
 
-	wlr_log_init(WLR_DEBUG, NULL);
+	wlr_log_init(WLR_ERROR, NULL);
 
-	/* Create persistent plugin widgets before panel_setup */
-	init_widgets(&panel);
+	init_plugins(&panel);
+
 	panel_setup(&panel);
 	panel_run(&panel);
 	panel_destroy(&panel);
