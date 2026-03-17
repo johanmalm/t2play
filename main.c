@@ -10,7 +10,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <strings.h>
 #include <wayland-util.h>
 #include "panel.h"
 #ifdef __FreeBSD__
@@ -871,8 +870,8 @@ panel_run(struct panel *panel)
 {
 	panel->run_display = true;
 
-	zwlr_layer_surface_v1_set_size(panel->layer_surface, 0, 30);
-	zwlr_layer_surface_v1_set_exclusive_zone(panel->layer_surface, 30);
+	zwlr_layer_surface_v1_set_size(panel->layer_surface, 0, PANEL_HEIGHT);
+	zwlr_layer_surface_v1_set_exclusive_zone(panel->layer_surface, PANEL_HEIGHT);
 	wl_surface_commit(panel->surface);
 	wl_display_roundtrip(panel->display);
 

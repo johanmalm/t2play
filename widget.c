@@ -1,6 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include <cairo/cairo.h>
 #include <stdlib.h>
-#include <wlr/util/log.h>
 #include "panel.h"
 
 void
@@ -39,10 +39,9 @@ widget_free(struct widget *widget)
 		cairo_surface_destroy(widget->surface);
 	}
 	free(widget);
-	widget = NULL;
 }
 
-void
+static void
 widget_destroy(struct widget *widget)
 {
 	wl_list_remove(&widget->link);
