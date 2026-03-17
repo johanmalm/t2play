@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <wayland-client.h>
+#include "xdg-shell-client-protocol.h"
 
 struct panel;
 struct seat;
@@ -45,6 +46,7 @@ struct conf {
 enum widget_type {
 	/* Plugins */
 	WIDGET_PLUGINS_BEGIN = 0,
+	WIDGET_STARTMENU,
 	WIDGET_TASKBAR,
 	WIDGET_CLOCK,
 	WIDGET_PLUGINS_END,
@@ -77,6 +79,17 @@ struct taskbar {
 	struct widget base;
 };
 
+struct startmenu {
+	struct widget base;
+	int hover;    /* highlighted item under mouse pointer, or -1 */
+	int selected; /* highlighted item via keyboard, or -1 */
+	bool popup_open;
+	struct wl_surface *popup_surface;
+	struct xdg_surface *xdg_surface;
+	struct xdg_popup *xdg_popup;
+	struct pool_buffer popup_buffers[2];
+};
+
 struct toplevel {
 	struct widget base;
 	struct zwlr_foreign_toplevel_handle_v1 *handle;
@@ -93,6 +106,8 @@ struct pointer {
 	struct wl_surface *cursor_surface;
 	int x;
 	int y;
+	uint32_t button_serial;
+	struct wl_surface *focus_surface;
 };
 
 struct seat {
@@ -100,6 +115,7 @@ struct seat {
 	uint32_t wl_name;
 	struct panel *panel;
 	struct pointer pointer;
+	struct wl_keyboard *keyboard;
 	struct wl_list link; /* panel.seats */
 };
 
@@ -134,9 +150,11 @@ struct panel {
 	struct zwlr_layer_surface_v1 *layer_surface;
 	struct wp_cursor_shape_manager_v1 *cursor_shape_manager;
 	struct wl_surface *surface;
+	struct xdg_wm_base *xdg_wm_base;
 
 	struct zwlr_foreign_toplevel_manager_v1 *toplevel_manager;
 	struct wl_list widgets; /* struct widget.link */
+	struct startmenu *open_popup; /* currently open start menu popup */
 
 	uint32_t width;
 	uint32_t height;
@@ -172,6 +190,14 @@ struct toplevel *toplevel_from_widget(struct widget *widget);
 
 void plugin_clock_update(struct panel *panel);
 void plugin_clock_create(struct panel *panel);
+
+void plugin_startmenu_create(struct panel *panel);
+void plugin_startmenu_update(struct panel *panel);
+void plugin_startmenu_destroy(struct startmenu *menu);
+void plugin_startmenu_key(struct panel *panel, uint32_t key);
+void plugin_startmenu_pointer_motion(struct startmenu *menu, int y);
+void plugin_startmenu_pointer_leave(struct startmenu *menu);
+void plugin_startmenu_popup_click(struct startmenu *menu, int y);
 
 void widget_on_left_button_press(struct widget *widget, struct seat *seat);
 char *widget_type(enum widget_type type);

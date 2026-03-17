@@ -29,6 +29,7 @@
 #include "cursor-shape-v1-client-protocol.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
+#include "xdg-shell-client-protocol.h"
 
 static void
 init_plugins(struct panel *panel)
@@ -37,7 +38,9 @@ init_plugins(struct panel *panel)
 		return;
 	}
 	for (const char *p = panel->conf->panel_items; *p; p++) {
-		if (*p == 'T') {
+		if (*p == 'S') {
+			plugin_startmenu_create(panel);
+		} else if (*p == 'T') {
 			plugin_taskbar_create(panel);
 		} else if (*p == 'C') {
 			plugin_clock_create(panel);
@@ -189,6 +192,10 @@ seat_destroy(struct seat *seat)
 	if (seat->pointer.pointer) {
 		wl_pointer_destroy(seat->pointer.pointer);
 	}
+	if (seat->keyboard) {
+		wl_keyboard_destroy(seat->keyboard);
+		seat->keyboard = NULL;
+	}
 	wl_seat_destroy(seat->wl_seat);
 	wl_list_remove(&seat->link);
 	free(seat);
@@ -255,6 +262,11 @@ panel_destroy(struct panel *panel)
 			wl_list_remove(&output->link);
 			free(output);
 		};
+	}
+
+	if (panel->xdg_wm_base) {
+		xdg_wm_base_destroy(panel->xdg_wm_base);
+		panel->xdg_wm_base = NULL;
 	}
 
 	if (panel->compositor) {
@@ -391,6 +403,7 @@ wl_pointer_enter(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 	struct pointer *pointer = &seat->pointer;
 	pointer->x = wl_fixed_to_int(surface_x);
 	pointer->y = wl_fixed_to_int(surface_y);
+	pointer->focus_surface = surface;
 
 	if (seat->panel->cursor_shape_manager) {
 		struct wp_cursor_shape_device_v1 *device =
@@ -409,7 +422,12 @@ static void
 wl_pointer_leave(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 	struct wl_surface *surface)
 {
-	/* nop */
+	struct seat *seat = data;
+	if (seat->panel->open_popup
+		&& surface == seat->panel->open_popup->popup_surface) {
+		plugin_startmenu_pointer_leave(seat->panel->open_popup);
+	}
+	seat->pointer.focus_surface = NULL;
 }
 
 static void
@@ -419,6 +437,12 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer, uint32_t time,
 	struct seat *seat = data;
 	seat->pointer.x = wl_fixed_to_int(surface_x);
 	seat->pointer.y = wl_fixed_to_int(surface_y);
+	if (seat->panel->open_popup
+		&& seat->pointer.focus_surface
+			!= seat->panel->surface) {
+		plugin_startmenu_pointer_motion(seat->panel->open_popup,
+			seat->pointer.y);
+	}
 }
 
 static void
@@ -429,6 +453,15 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 	struct panel *panel = seat->panel;
 
 	if (state != WL_POINTER_BUTTON_STATE_PRESSED) {
+		return;
+	}
+
+	seat->pointer.button_serial = serial;
+
+	if (panel->open_popup
+		&& seat->pointer.focus_surface != panel->surface) {
+		plugin_startmenu_popup_click(panel->open_popup,
+			seat->pointer.y);
 		return;
 	}
 
@@ -490,6 +523,64 @@ static const struct wl_pointer_listener pointer_listener = {
 };
 
 static void
+wl_keyboard_keymap(void *data, struct wl_keyboard *keyboard, uint32_t format,
+	int32_t fd, uint32_t size)
+{
+	/* nop */
+}
+
+static void
+wl_keyboard_enter(void *data, struct wl_keyboard *keyboard, uint32_t serial,
+	struct wl_surface *surface, struct wl_array *keys)
+{
+	/* nop */
+}
+
+static void
+wl_keyboard_leave(void *data, struct wl_keyboard *keyboard, uint32_t serial,
+	struct wl_surface *surface)
+{
+	/* nop */
+}
+
+static void
+wl_keyboard_key(void *data, struct wl_keyboard *keyboard, uint32_t serial,
+	uint32_t time, uint32_t key, uint32_t state)
+{
+	struct seat *seat = data;
+	if (state != WL_KEYBOARD_KEY_STATE_PRESSED) {
+		return;
+	}
+	if (seat->panel->open_popup) {
+		plugin_startmenu_key(seat->panel, key);
+	}
+}
+
+static void
+wl_keyboard_modifiers(void *data, struct wl_keyboard *keyboard,
+	uint32_t serial, uint32_t mods_depressed, uint32_t mods_latched,
+	uint32_t mods_locked, uint32_t group)
+{
+	/* nop */
+}
+
+static void
+wl_keyboard_repeat_info(void *data, struct wl_keyboard *keyboard,
+	int32_t rate, int32_t delay)
+{
+	/* nop */
+}
+
+static const struct wl_keyboard_listener keyboard_listener = {
+	.keymap = wl_keyboard_keymap,
+	.enter = wl_keyboard_enter,
+	.leave = wl_keyboard_leave,
+	.key = wl_keyboard_key,
+	.modifiers = wl_keyboard_modifiers,
+	.repeat_info = wl_keyboard_repeat_info,
+};
+
+static void
 seat_handle_capabilities(void *data, struct wl_seat *wl_seat,
 	enum wl_seat_capability caps)
 {
@@ -502,6 +593,15 @@ seat_handle_capabilities(void *data, struct wl_seat *wl_seat,
 	} else if (!cap_pointer && seat->pointer.pointer) {
 		wl_pointer_destroy(seat->pointer.pointer);
 		seat->pointer.pointer = NULL;
+	}
+	bool cap_keyboard = caps & WL_SEAT_CAPABILITY_KEYBOARD;
+	if (cap_keyboard && !seat->keyboard) {
+		seat->keyboard = wl_seat_get_keyboard(wl_seat);
+		wl_keyboard_add_listener(seat->keyboard, &keyboard_listener,
+			seat);
+	} else if (!cap_keyboard && seat->keyboard) {
+		wl_keyboard_destroy(seat->keyboard);
+		seat->keyboard = NULL;
 	}
 }
 
@@ -582,6 +682,17 @@ static const struct wl_output_listener output_listener = {
 };
 
 static void
+xdg_wm_base_handle_ping(void *data, struct xdg_wm_base *xdg_wm_base,
+	uint32_t serial)
+{
+	xdg_wm_base_pong(xdg_wm_base, serial);
+}
+
+static const struct xdg_wm_base_listener xdg_wm_base_listener = {
+	.ping = xdg_wm_base_handle_ping,
+};
+
+static void
 handle_global(void *data, struct wl_registry *registry, uint32_t name,
 	const char *interface, uint32_t version)
 {
@@ -625,6 +736,11 @@ handle_global(void *data, struct wl_registry *registry, uint32_t name,
 		panel->toplevel_manager = wl_registry_bind(registry, name,
 			&zwlr_foreign_toplevel_manager_v1_interface, 3);
 		plugin_taskbar_init(panel);
+	} else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
+		panel->xdg_wm_base = wl_registry_bind(registry, name,
+			&xdg_wm_base_interface, 2);
+		xdg_wm_base_add_listener(panel->xdg_wm_base,
+			&xdg_wm_base_listener, NULL);
 	}
 }
 
@@ -761,6 +877,7 @@ panel_run(struct panel *panel)
 	wl_display_roundtrip(panel->display);
 
 	plugin_clock_update(panel);
+	plugin_startmenu_update(panel);
 
 	render_frame(panel);
 	while (panel->run_display) {
@@ -853,7 +970,7 @@ conf_init(struct conf *conf)
 	conf->text = 0xFFFFFFFF;
 	conf->button_background = 0x4A4A4AFF;
 	conf->button_active = 0x5A8AC6FF;
-	conf->panel_items = strdup("TSC");
+	conf->panel_items = strdup("STC");
 }
 
 int
