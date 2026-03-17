@@ -41,6 +41,7 @@ struct conf {
 
 #define BUTTON_PADDING 8
 #define BUTTON_MAX_WIDTH 200
+#define PANEL_HEIGHT 30
 
 enum widget_type {
 	/* Plugins */

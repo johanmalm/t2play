@@ -1,16 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include <assert.h>
 #include <wlr/util/box.h>
 #include <wlr/util/log.h>
 #include "panel.h"
-#include "pango/pango-types.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 
 static struct wlr_box
-button_size(struct panel *panel, const char *label, PangoRectangle rect)
+button_size(PangoRectangle rect)
 {
 	struct wlr_box box = {
 		.width = rect.width + 2 * BUTTON_PADDING,
-		.height = 30,
+		.height = PANEL_HEIGHT,
 	};
 	box.width = MIN(box.width, BUTTON_MAX_WIDTH);
 	return box;
@@ -33,7 +33,7 @@ toplevel_update_surface(struct toplevel *toplevel)
 		: (toplevel->app_id ? toplevel->app_id : "?");
 	PangoRectangle rect =
 		get_text_size(panel->conf->font_description, label);
-	struct wlr_box box = button_size(panel, label, rect);
+	struct wlr_box box = button_size(rect);
 
 	widget->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
 		box.width, box.height);
@@ -236,6 +236,7 @@ void
 plugin_taskbar_create(struct panel *panel)
 {
 	struct taskbar *taskbar = znew(*taskbar);
+	taskbar->base.panel = panel;
 	taskbar->base.type = WIDGET_TASKBAR;
 	wl_list_insert(panel->widgets.prev, &taskbar->base.link);
 }

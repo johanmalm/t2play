@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include <wlr/util/log.h>
 #include "panel.h"
 
@@ -25,7 +26,7 @@ PangoRectangle
 get_text_size(const PangoFontDescription *desc, const char *string)
 {
 	PangoRectangle rect = {0};
-	if (!string && !*string) {
+	if (!string || !*string) {
 		return rect;
 	}
 	cairo_surface_t *surface;
