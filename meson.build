@@ -28,6 +28,7 @@ wayland_cursor = dependency('wayland-cursor')
 wayland_protos = dependency('wayland-protocols', version: '>=1.24')
 wayland_scanner_dep = dependency('wayland-scanner', native: true)
 wlroots = dependency('wlroots-0.19')
+xkbcommon = dependency('xkbcommon')
 
 sources = files(
   'main.c',
@@ -36,6 +37,7 @@ sources = files(
   'widget.c',
 
   'plugin-clock.c',
+  'plugin-kbdlayout.c',
   'plugin-startmenu.c',
   'plugin-taskbar.c',
 )
@@ -81,5 +83,6 @@ executable(
     wayland_client,
     wayland_cursor,
     wlroots,
+    xkbcommon,
   ],
 )

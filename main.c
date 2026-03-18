@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 #include <wayland-util.h>
 #include "panel.h"
 #ifdef __FreeBSD__
@@ -43,6 +44,8 @@ init_plugins(struct panel *panel)
 			plugin_taskbar_create(panel);
 		} else if (*p == 'C') {
 			plugin_clock_create(panel);
+		} else if (*p == 'K') {
+			plugin_kbdlayout_create(panel);
 		} else {
 			wlr_log(WLR_ERROR, "unknown panel_items code '%c'", *p);
 		}
@@ -194,6 +197,12 @@ seat_destroy(struct seat *seat)
 	if (seat->keyboard) {
 		wl_keyboard_destroy(seat->keyboard);
 		seat->keyboard = NULL;
+	}
+	if (seat->xkb_keymap) {
+		xkb_keymap_unref(seat->xkb_keymap);
+	}
+	if (seat->xkb_context) {
+		xkb_context_unref(seat->xkb_context);
 	}
 	wl_seat_destroy(seat->wl_seat);
 	wl_list_remove(&seat->link);
@@ -525,7 +534,30 @@ static void
 wl_keyboard_keymap(void *data, struct wl_keyboard *keyboard, uint32_t format,
 	int32_t fd, uint32_t size)
 {
-	/* nop */
+	struct seat *seat = data;
+	if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) {
+		close(fd);
+		return;
+	}
+	if (size == 0) {
+		close(fd);
+		return;
+	}
+	char *keymap_str = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+	close(fd);
+	if (keymap_str == MAP_FAILED) {
+		return;
+	}
+	if (!seat->xkb_context) {
+		seat->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+	}
+	if (seat->xkb_keymap) {
+		xkb_keymap_unref(seat->xkb_keymap);
+	}
+	seat->xkb_keymap = xkb_keymap_new_from_string(seat->xkb_context,
+		keymap_str, XKB_KEYMAP_FORMAT_TEXT_V1,
+		XKB_KEYMAP_COMPILE_NO_FLAGS);
+	munmap(keymap_str, size);
 }
 
 static void
@@ -560,7 +592,20 @@ wl_keyboard_modifiers(void *data, struct wl_keyboard *keyboard,
 	uint32_t serial, uint32_t mods_depressed, uint32_t mods_latched,
 	uint32_t mods_locked, uint32_t group)
 {
-	/* nop */
+	struct seat *seat = data;
+	if (!seat->xkb_keymap) {
+		return;
+	}
+	const char *layout_name =
+		xkb_keymap_layout_get_name(seat->xkb_keymap, group);
+	if (!layout_name) {
+		return;
+	}
+	struct panel *panel = seat->panel;
+	snprintf(panel->kbd_layout, sizeof(panel->kbd_layout), "%s",
+		layout_name);
+	plugin_kbdlayout_update(panel);
+	render_frame(panel);
 }
 
 static void
@@ -877,6 +922,7 @@ panel_run(struct panel *panel)
 
 	plugin_clock_update(panel);
 	plugin_startmenu_update(panel);
+	plugin_kbdlayout_update(panel);
 
 	render_frame(panel);
 	while (panel->run_display) {
@@ -969,7 +1015,7 @@ conf_init(struct conf *conf)
 	conf->text = 0xFFFFFFFF;
 	conf->button_background = 0x4A4A4AFF;
 	conf->button_active = 0x5A8AC6FF;
-	conf->panel_items = strdup("STC");
+	conf->panel_items = strdup("STKC");
 }
 
 int
