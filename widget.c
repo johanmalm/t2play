@@ -16,6 +16,8 @@ widget_type(enum widget_type type)
 {
 	if (type == WIDGET_CLOCK)
 		return "clock";
+	if (type == WIDGET_KBDLAYOUT)
+		return "kbdlayout";
 	if (type == WIDGET_STARTMENU)
 		return "startmenu";
 	if (type == WIDGET_TASKBAR)

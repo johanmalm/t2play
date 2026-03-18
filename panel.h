@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <wayland-client.h>
+#include <xkbcommon/xkbcommon.h>
 #include "xdg-shell-client-protocol.h"
 
 struct panel;
@@ -50,6 +51,7 @@ enum widget_type {
 	WIDGET_STARTMENU,
 	WIDGET_TASKBAR,
 	WIDGET_CLOCK,
+	WIDGET_KBDLAYOUT,
 	WIDGET_PLUGINS_END,
 
 	/* Other */
@@ -73,6 +75,10 @@ struct widget {
 
 /* Derived classes */
 struct clock {
+	struct widget base;
+};
+
+struct kbdlayout {
 	struct widget base;
 };
 
@@ -117,6 +123,8 @@ struct seat {
 	struct panel *panel;
 	struct pointer pointer;
 	struct wl_keyboard *keyboard;
+	struct xkb_context *xkb_context;
+	struct xkb_keymap *xkb_keymap;
 	struct wl_list link; /* panel.seats */
 };
 
@@ -163,6 +171,8 @@ struct panel {
 	struct pool_buffer buffers[2];
 	struct pool_buffer *current_buffer;
 
+	char kbd_layout[64]; /* current keyboard layout name */
+
 	struct conf *conf;
 	char *message;
 	struct pollfd pollfds[NR_FDS];
@@ -191,6 +201,9 @@ struct toplevel *toplevel_from_widget(struct widget *widget);
 
 void plugin_clock_update(struct panel *panel);
 void plugin_clock_create(struct panel *panel);
+
+void plugin_kbdlayout_update(struct panel *panel);
+void plugin_kbdlayout_create(struct panel *panel);
 
 void plugin_startmenu_create(struct panel *panel);
 void plugin_startmenu_update(struct panel *panel);
