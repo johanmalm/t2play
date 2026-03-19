@@ -18,6 +18,8 @@ widget_type(enum widget_type type)
 		return "clock";
 	if (type == WIDGET_KBDLAYOUT)
 		return "kbdlayout";
+	if (type == WIDGET_SNI)
+		return "sni";
 	if (type == WIDGET_STARTMENU)
 		return "startmenu";
 	if (type == WIDGET_TASKBAR)
@@ -64,6 +66,8 @@ widgets_free(struct panel *panel)
 			struct startmenu *menu =
 				(struct startmenu *)widget;
 			plugin_startmenu_destroy(menu);
+		} else if (widget->type == WIDGET_SNI) {
+			plugin_sni_destroy((struct sni *)widget);
 		} else {
 			widget_destroy(widget);
 		}

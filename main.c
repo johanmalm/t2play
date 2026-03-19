@@ -46,6 +46,8 @@ init_plugins(struct panel *panel)
 			plugin_clock_create(panel);
 		} else if (*p == 'K') {
 			plugin_kbdlayout_create(panel);
+		} else if (*p == 'N') {
+			plugin_sni_create(panel);
 		} else {
 			wlr_log(WLR_ERROR, "unknown panel_items code '%c'", *p);
 		}
@@ -292,6 +294,9 @@ panel_destroy(struct panel *panel)
 
 	close_pollfd(&panel->pollfds[FD_SIGNAL]);
 	close_pollfd(&panel->pollfds[FD_CLOCK]);
+	/* FD_SNI is owned by the D-Bus connection; reset without closing */
+	panel->pollfds[FD_SNI].fd = -1;
+	panel->pollfds[FD_SNI].events = 0;
 }
 
 static void
@@ -908,6 +913,20 @@ panel_setup(struct panel *panel)
 	panel->pollfds[FD_SIGNAL].fd =
 		signalfd(-1, &mask, SFD_CLOEXEC | SFD_NONBLOCK);
 	panel->pollfds[FD_SIGNAL].events = POLLIN;
+
+	/* Set up D-Bus fd for status-notifier plugin if loaded */
+	panel->pollfds[FD_SNI].fd = -1;
+	struct widget *sni_widget;
+	wl_list_for_each(sni_widget, &panel->widgets, link) {
+		if (sni_widget->type == WIDGET_SNI) {
+			struct sni *sni = (struct sni *)sni_widget;
+			if (sni->unix_fd >= 0) {
+				panel->pollfds[FD_SNI].fd = sni->unix_fd;
+				panel->pollfds[FD_SNI].events = POLLIN;
+			}
+			break;
+		}
+	}
 }
 
 static void
@@ -923,6 +942,7 @@ panel_run(struct panel *panel)
 	plugin_clock_update(panel);
 	plugin_startmenu_update(panel);
 	plugin_kbdlayout_update(panel);
+	plugin_sni_update(panel);
 
 	render_frame(panel);
 	while (panel->run_display) {
@@ -953,6 +973,9 @@ panel_run(struct panel *panel)
 			read(panel->pollfds[FD_CLOCK].fd, &exp, sizeof(exp));
 			plugin_clock_update(panel);
 			render_frame(panel);
+		}
+		if (panel->pollfds[FD_SNI].revents & POLLIN) {
+			plugin_sni_dispatch(panel);
 		}
 	}
 }
