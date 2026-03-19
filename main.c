@@ -201,6 +201,9 @@ seat_destroy(struct seat *seat)
 	if (seat->xkb_keymap) {
 		xkb_keymap_unref(seat->xkb_keymap);
 	}
+	if (seat->xkb_state) {
+		xkb_state_unref(seat->xkb_state);
+	}
 	if (seat->xkb_context) {
 		xkb_context_unref(seat->xkb_context);
 	}
@@ -488,7 +491,14 @@ static void
 wl_pointer_axis(void *data, struct wl_pointer *wl_pointer, uint32_t time,
 	uint32_t axis, wl_fixed_t value)
 {
-	/* nop */
+	struct seat *seat = data;
+	/* WL_POINTER_AXIS_VERTICAL_SCROLL = 0 */
+	if (seat->panel->open_popup && axis == 0
+			&& seat->pointer.focus_surface
+				!= seat->panel->surface) {
+		plugin_startmenu_scroll(seat->panel->open_popup,
+			wl_fixed_to_double(value));
+	}
 }
 
 static void
@@ -558,6 +568,12 @@ wl_keyboard_keymap(void *data, struct wl_keyboard *keyboard, uint32_t format,
 		keymap_str, XKB_KEYMAP_FORMAT_TEXT_V1,
 		XKB_KEYMAP_COMPILE_NO_FLAGS);
 	munmap(keymap_str, size);
+	if (seat->xkb_keymap) {
+		if (seat->xkb_state) {
+			xkb_state_unref(seat->xkb_state);
+		}
+		seat->xkb_state = xkb_state_new(seat->xkb_keymap);
+	}
 }
 
 static void
@@ -584,6 +600,15 @@ wl_keyboard_key(void *data, struct wl_keyboard *keyboard, uint32_t serial,
 	}
 	if (seat->panel->open_popup) {
 		plugin_startmenu_key(seat->panel, key);
+		/* Handle printable characters for type-to-search */
+		if (seat->xkb_state) {
+			char utf8[8] = {0};
+			if (xkb_state_key_get_utf8(seat->xkb_state,
+					key + 8, utf8, sizeof(utf8)) > 0
+					&& (unsigned char)utf8[0] >= 0x20) {
+				plugin_startmenu_text_input(seat->panel, utf8);
+			}
+		}
 	}
 }
 
@@ -593,6 +618,10 @@ wl_keyboard_modifiers(void *data, struct wl_keyboard *keyboard,
 	uint32_t mods_locked, uint32_t group)
 {
 	struct seat *seat = data;
+	if (seat->xkb_state) {
+		xkb_state_update_mask(seat->xkb_state, mods_depressed,
+			mods_latched, mods_locked, 0, 0, group);
+	}
 	if (!seat->xkb_keymap) {
 		return;
 	}

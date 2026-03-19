@@ -27,7 +27,12 @@ wayland_client = dependency('wayland-client')
 wayland_cursor = dependency('wayland-cursor')
 wayland_protos = dependency('wayland-protocols', version: '>=1.24')
 wayland_scanner_dep = dependency('wayland-scanner', native: true)
-wlroots = dependency('wlroots-0.19')
+wlroots = dependency('wlroots-0.19', required: false)
+if not wlroots.found()
+  wlroots = dependency('wlroots', version: '>=0.17')
+endif
+libsfdo_desktop = dependency('libsfdo-desktop')
+libsfdo_basedir = dependency('libsfdo-basedir')
 xkbcommon = dependency('xkbcommon')
 
 sources = files(
@@ -84,5 +89,7 @@ executable(
     wayland_cursor,
     wlroots,
     xkbcommon,
+    libsfdo_desktop,
+    libsfdo_basedir,
   ],
 )

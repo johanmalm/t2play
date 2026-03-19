@@ -95,6 +95,21 @@ struct startmenu {
 	struct xdg_surface *xdg_surface;
 	struct xdg_popup *xdg_popup;
 	struct pool_buffer popup_buffers[2];
+
+	/* Application list loaded from .desktop files */
+	char **app_names;  /* display names */
+	char **app_execs;  /* executable paths (exec arg0) */
+	int n_apps;        /* total number of apps */
+
+	/* Type-to-search state */
+	char search[256];
+	int search_len;
+
+	/* Filtered / scrollable view */
+	int *filtered;      /* indices into app_names/app_execs that match search */
+	int n_filtered;     /* number of matching apps */
+	int scroll_offset;  /* index of first visible item in filtered[] */
+	int n_visible;      /* max items shown at once (set when popup opens) */
 };
 
 struct toplevel {
@@ -125,6 +140,7 @@ struct seat {
 	struct wl_keyboard *keyboard;
 	struct xkb_context *xkb_context;
 	struct xkb_keymap *xkb_keymap;
+	struct xkb_state *xkb_state;
 	struct wl_list link; /* panel.seats */
 };
 
@@ -209,9 +225,11 @@ void plugin_startmenu_create(struct panel *panel);
 void plugin_startmenu_update(struct panel *panel);
 void plugin_startmenu_destroy(struct startmenu *menu);
 void plugin_startmenu_key(struct panel *panel, uint32_t key);
+void plugin_startmenu_text_input(struct panel *panel, const char *utf8);
 void plugin_startmenu_pointer_motion(struct startmenu *menu, int y);
 void plugin_startmenu_pointer_leave(struct startmenu *menu);
 void plugin_startmenu_popup_click(struct startmenu *menu, int y);
+void plugin_startmenu_scroll(struct startmenu *menu, double delta);
 
 void widget_on_left_button_press(struct widget *widget, struct seat *seat);
 char *widget_type(enum widget_type type);
