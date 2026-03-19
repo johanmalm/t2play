@@ -417,8 +417,8 @@ sni_update_surface(struct sni *sni)
 	cairo_t *cr = cairo_create(sni->base.surface);
 
 	int icon_size = SNI_ICON_SIZE;
-	if (icon_size > panel->height) {
-		icon_size = panel->height;
+	if ((uint32_t)icon_size > panel->height) {
+		icon_size = (int)panel->height;
 	}
 
 	int x = 0;
@@ -678,7 +678,7 @@ message_filter(DBusConnection *conn, DBusMessage *msg, void *data)
 	int type = dbus_message_get_type(msg);
 	const char *iface = dbus_message_get_interface(msg);
 	const char *member = dbus_message_get_member(msg);
-	const char *path = dbus_message_get_object_path(msg);
+	const char *path = dbus_message_get_path(msg);
 
 	if (!iface || !member) {
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
