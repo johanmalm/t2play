@@ -414,8 +414,7 @@ load_apps(struct startmenu *menu)
 		if (sfdo_desktop_entry_get_no_display(entry)) {
 			continue;
 		}
-		const char *exec = sfdo_desktop_entry_get_exec_arg0(entry);
-		if (!exec || !*exec) {
+		if (!sfdo_desktop_entry_get_exec(entry)) {
 			continue;
 		}
 		count++;
@@ -443,13 +442,36 @@ load_apps(struct startmenu *menu)
 		if (sfdo_desktop_entry_get_no_display(entry)) {
 			continue;
 		}
-		const char *exec = sfdo_desktop_entry_get_exec_arg0(entry);
-		if (!exec || !*exec) {
+		struct sfdo_desktop_exec *exec_tmpl =
+			sfdo_desktop_entry_get_exec(entry);
+		if (!exec_tmpl) {
+			continue;
+		}
+		/*
+		 * Format the exec template without a file argument to get a
+		 * concrete argv list, then take args[0] as the executable.
+		 * This uses only the stable libsfdo API available in all
+		 * releases, avoiding sfdo_desktop_entry_get_exec_arg0() which
+		 * was added later.
+		 */
+		struct sfdo_desktop_exec_command *cmd =
+			sfdo_desktop_exec_format(exec_tmpl, NULL);
+		if (!cmd) {
+			continue;
+		}
+		size_t n_args;
+		const char **args =
+			sfdo_desktop_exec_command_get_args(cmd, &n_args);
+		const char *exec_str =
+			(n_args > 0 && args && args[0]) ? args[0] : NULL;
+		if (!exec_str || !*exec_str) {
+			sfdo_desktop_exec_command_destroy(cmd);
 			continue;
 		}
 		const char *name = sfdo_desktop_entry_get_name(entry, NULL);
-		entries_buf[j].name = strdup(name && *name ? name : exec);
-		entries_buf[j].exec = strdup(exec);
+		entries_buf[j].name = strdup(name && *name ? name : exec_str);
+		entries_buf[j].exec = strdup(exec_str);
+		sfdo_desktop_exec_command_destroy(cmd);
 		j++;
 	}
 	sfdo_desktop_db_destroy(db);
