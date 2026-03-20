@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include "conf.h"
+#include "mem.h"
 #include "panel.h"
 
 void

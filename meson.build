@@ -36,7 +36,9 @@ libsfdo_basedir = dependency('libsfdo-basedir')
 xkbcommon = dependency('xkbcommon')
 
 sources = files(
+  'conf.c',
   'main.c',
+  'mem.c',
   'pool.c',
   'util.c',
   'widget.c',

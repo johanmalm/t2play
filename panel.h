@@ -25,26 +25,6 @@ struct pool_buffer {
 	bool busy;
 };
 
-struct conf {
-	PangoFontDescription *font_description;
-	char *output;
-	uint32_t anchors;
-	int32_t layer; /* enum zwlr_layer_shell_v1_layer or -1 if unset */
-
-	/* Colors */
-	uint32_t background;
-	uint32_t text;
-	uint32_t button_background;
-	uint32_t button_active;
-
-	/* Panel layout: string of item codes, e.g. "TC" (T=Taskbar, C=Clock) */
-	char *panel_items;
-};
-
-#define BUTTON_PADDING 8
-#define BUTTON_MAX_WIDTH 200
-#define PANEL_HEIGHT 30
-
 enum widget_type {
 	/* Plugins */
 	WIDGET_PLUGINS_BEGIN = 0,
@@ -193,10 +173,6 @@ struct panel {
 	char *message;
 	struct pollfd pollfds[NR_FDS];
 };
-
-void die_if_null(void *ptr);
-void *xzalloc(size_t size);
-#define znew(expr) ((__typeof__(expr) *)xzalloc(sizeof(expr)))
 
 void render_frame(struct panel *panel);
 

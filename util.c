@@ -2,26 +2,6 @@
 #include <wlr/util/log.h>
 #include "panel.h"
 
-void
-die_if_null(void *ptr)
-{
-	if (!ptr) {
-		perror("Failed to allocate memory");
-		exit(EXIT_FAILURE);
-	}
-}
-
-void *
-xzalloc(size_t size)
-{
-	if (!size) {
-		return NULL;
-	}
-	void *ptr = calloc(1, size);
-	die_if_null(ptr);
-	return ptr;
-}
-
 PangoRectangle
 get_text_size(const PangoFontDescription *desc, const char *string)
 {

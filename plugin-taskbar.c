@@ -2,6 +2,8 @@
 #include <assert.h>
 #include <wlr/util/box.h>
 #include <wlr/util/log.h>
+#include "conf.h"
+#include "mem.h"
 #include "panel.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 

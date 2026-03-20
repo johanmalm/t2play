@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <assert.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <linux/input-event-codes.h>
 #include <sfdo-basedir.h>
@@ -11,6 +10,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <wlr/util/log.h>
+#include "conf.h"
+#include "mem.h"
 #include "panel.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"

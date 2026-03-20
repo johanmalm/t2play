@@ -57,12 +57,10 @@ widgets_free(struct panel *panel)
 
 	wl_list_for_each_safe(widget, next, &panel->widgets, link) {
 		if (widget->type == WIDGET_TOPLEVEL) {
-			struct toplevel *toplevel =
-				toplevel_from_widget(widget);
+			struct toplevel *toplevel = toplevel_from_widget(widget);
 			toplevel_destroy(toplevel);
 		} else if (widget->type == WIDGET_STARTMENU) {
-			struct startmenu *menu =
-				(struct startmenu *)widget;
+			struct startmenu *menu = (struct startmenu *)widget;
 			plugin_startmenu_destroy(menu);
 		} else {
 			widget_destroy(widget);
