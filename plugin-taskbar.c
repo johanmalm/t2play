@@ -84,34 +84,26 @@ toplevel_destroy(struct toplevel *toplevel)
 {
 	wl_list_remove(&toplevel->base.link);
 	zwlr_foreign_toplevel_handle_v1_destroy(toplevel->handle);
-	free(toplevel->title);
-	free(toplevel->app_id);
+	zfree(toplevel->title);
+	zfree(toplevel->app_id);
 	widget_free(&toplevel->base);
 }
 
 static void
-handle_toplevel_title(void *data,
-	struct zwlr_foreign_toplevel_handle_v1 *handle, const char *title)
+handle_toplevel_title(void *data, struct zwlr_foreign_toplevel_handle_v1 *handle,
+		const char *title)
 {
 	struct toplevel *toplevel = data;
-	free(toplevel->title);
-	toplevel->title = strdup(title);
-	if (!toplevel->title) {
-		perror("strdup");
-	}
+	xstrdup_replace(toplevel->title, title);
 	toplevel_update_surface(toplevel);
 }
 
 static void
-handle_toplevel_app_id(void *data,
-	struct zwlr_foreign_toplevel_handle_v1 *handle, const char *app_id)
+handle_toplevel_app_id(void *data, struct zwlr_foreign_toplevel_handle_v1 *handle,
+	       const char *app_id)
 {
 	struct toplevel *toplevel = data;
-	free(toplevel->app_id);
-	toplevel->app_id = strdup(app_id);
-	if (!toplevel->app_id) {
-		perror("strdup");
-	}
+	xstrdup_replace(toplevel->app_id, app_id);
 	toplevel_update_surface(toplevel);
 }
 

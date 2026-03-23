@@ -13,6 +13,7 @@
 #include "conf.h"
 #include "mem.h"
 #include "panel.h"
+#include "string-helpers.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
@@ -35,7 +36,7 @@ str_contains_icase(const char *haystack, const char *needle)
 	if (!haystack) {
 		return false;
 	}
-	if (!needle || !*needle) {
+	if (string_null_or_empty(needle)) {
 		return true;
 	}
 	size_t nlen = strlen(needle);
@@ -54,8 +55,7 @@ str_contains_icase(const char *haystack, const char *needle)
 static void
 update_filtered(struct startmenu *menu)
 {
-	free(menu->filtered);
-	menu->filtered = NULL;
+	zfree(menu->filtered);
 	menu->n_filtered = 0;
 	menu->scroll_offset = 0;
 	menu->hover = -1;
@@ -84,7 +84,7 @@ update_filtered(struct startmenu *menu)
 static void
 launch_app(const char *exec)
 {
-	if (!exec || !*exec) {
+	if (string_null_or_empty(exec)) {
 		return;
 	}
 	pid_t pid = fork();
@@ -465,7 +465,7 @@ load_apps(struct startmenu *menu)
 			sfdo_desktop_exec_command_get_args(cmd, &n_args);
 		const char *exec_str =
 			(n_args > 0 && args && args[0]) ? args[0] : NULL;
-		if (!exec_str || !*exec_str) {
+		if (string_null_or_empty(exec_str)) {
 			sfdo_desktop_exec_command_destroy(cmd);
 			continue;
 		}
@@ -678,7 +678,7 @@ void
 plugin_startmenu_text_input(struct panel *panel, const char *utf8)
 {
 	struct startmenu *menu = panel->open_popup;
-	if (!menu || !utf8 || !*utf8) {
+	if (!menu || string_null_or_empty(utf8)) {
 		return;
 	}
 

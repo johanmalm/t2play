@@ -210,7 +210,7 @@ seat_destroy(struct seat *seat)
 	}
 	wl_seat_destroy(seat->wl_seat);
 	wl_list_remove(&seat->link);
-	free(seat);
+	zfree(seat);
 }
 
 static void
@@ -264,15 +264,13 @@ panel_destroy(struct panel *panel)
 	destroy_buffer(&panel->buffers[0]);
 	destroy_buffer(&panel->buffers[1]);
 
-	if (panel->outputs.prev || panel->outputs.next) {
-		struct output *output, *temp;
-		wl_list_for_each_safe(output, temp, &panel->outputs, link) {
-			wl_output_destroy(output->wl_output);
-			free(output->name);
-			wl_list_remove(&output->link);
-			free(output);
-		};
-	}
+	struct output *output, *temp;
+	wl_list_for_each_safe(output, temp, &panel->outputs, link) {
+		wl_output_destroy(output->wl_output);
+		zfree(output->name);
+		wl_list_remove(&output->link);
+		zfree(output);
+	};
 
 	if (panel->xdg_wm_base) {
 		xdg_wm_base_destroy(panel->xdg_wm_base);
@@ -724,16 +722,17 @@ output_scale(void *data, struct wl_output *output, int32_t factor)
 }
 
 static void
-output_name(void *data, struct wl_output *output, const char *name)
+output_name(void *data, struct wl_output *wl_output, const char *name)
 {
-	struct output *panel_output = data;
-	panel_output->name = strdup(name);
+	struct output *output = data;
+	xstrdup_replace(output->name, name);
 
-	const char *outname = panel_output->panel->conf->output;
-	if (!panel_output->panel->output && outname
-		&& strcmp(outname, name) == 0) {
+	struct panel *panel = output->panel;
+	struct conf *conf = panel->conf;
+
+	if (!panel->output && conf->output && !strcmp(conf->output, name)) {
 		wlr_log(WLR_DEBUG, "Using output %s", name);
-		panel_output->panel->output = panel_output;
+		panel->output = output;
 	}
 }
 
@@ -894,11 +893,9 @@ panel_setup(struct panel *panel)
 	assert(panel->surface);
 	wl_surface_add_listener(panel->surface, &surface_listener, panel);
 
-	panel->layer_surface =
-		zwlr_layer_shell_v1_get_layer_surface(panel->layer_shell,
-			panel->surface,
-			panel->output ? panel->output->wl_output : NULL,
-			panel->conf->layer, "t2play");
+	panel->layer_surface = zwlr_layer_shell_v1_get_layer_surface(panel->layer_shell,
+		panel->surface, panel->output ? panel->output->wl_output : NULL,
+		panel->conf->layer, "t2play");
 	assert(panel->layer_surface);
 	zwlr_layer_surface_v1_add_listener(panel->layer_surface,
 		&layer_surface_listener, panel);
@@ -985,36 +982,71 @@ panel_run(struct panel *panel)
 	}
 }
 
+static const struct option long_options[] = {
+	{"config", required_argument, NULL, 'c'},
+	{"debug", no_argument, NULL, 'd'},
+	{"help", no_argument, NULL, 'h'},
+	{"output", required_argument, NULL, 'o'},
+	{"verbose", no_argument, NULL, 'V'},
+	{0, 0, 0, 0}
+};
+
+static const char t2conf_usage[] =
+"Usage: t2conf [options...]\n"
+"  -c, --config <file>      Specify config file (with path)\n"
+"  -d, --debug              Enable full logging, including debug information\n"
+"  -h, --help               Show help message and quit\n"
+"  -o  --output <name>      Specify output (monitor)\n"
+"  -V, --verbose            Enable more verbose logging\n";
+
+static void
+usage(void)
+{
+	printf("%s", t2conf_usage);
+	exit(0);
+}
+
 int
 main(int argc, char **argv)
 {
-	struct conf conf = {0};
+	enum wlr_log_importance verbosity = WLR_ERROR;
+	const char *config_file = NULL;
+
+	struct conf conf = { 0 };
 	conf_init(&conf);
 
-	/* Load config file from $XDG_CONFIG_HOME/t2play/config.yaml */
-	char config_path[PATH_MAX];
-	const char *xdg_config_home = getenv("XDG_CONFIG_HOME");
-	if (xdg_config_home && *xdg_config_home) {
-		int n = snprintf(config_path, sizeof(config_path),
-			"%s/t2play/config.yaml", xdg_config_home);
-		if (n < 0 || (size_t)n >= sizeof(config_path)) {
-			config_path[0] = '\0';
+	int c;
+	while (1) {
+		int index = 0;
+		c = getopt_long(argc, argv, "c:dho:V", long_options, &index);
+		if (c == -1) {
+			break;
 		}
-	} else {
-		const char *home = getenv("HOME");
-		if (home) {
-			int n = snprintf(config_path, sizeof(config_path),
-				"%s/.config/t2play/config.yaml", home);
-			if (n < 0 || (size_t)n >= sizeof(config_path)) {
-				config_path[0] = '\0';
-			}
-		} else {
-			config_path[0] = '\0';
+		switch (c) {
+		case 'c':
+			config_file = optarg;
+			break;
+		case 'd':
+			verbosity = WLR_DEBUG;
+			break;
+		case 'V':
+			verbosity = WLR_INFO;
+			break;
+		case 'o':
+			xstrdup_replace(conf.output, optarg);
+			break;
+		case 'h':
+		default:
+			usage();
 		}
 	}
-	if (config_path[0]) {
-		conf_load(&conf, config_path);
+	if (optind < argc) {
+		usage();
 	}
+
+	wlr_log_init(verbosity, NULL);
+
+	conf_load(&conf, config_file);
 
 	struct panel panel = {
 		.conf = &conf,
@@ -1023,8 +1055,6 @@ main(int argc, char **argv)
 	wl_list_init(&panel.outputs);
 	wl_list_init(&panel.seats);
 	wl_list_init(&panel.widgets);
-
-	wlr_log_init(WLR_ERROR, NULL);
 
 	init_plugins(&panel);
 

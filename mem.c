@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#define _POSIX_C_SOURCE 200809L
 #include "mem.h"
+#include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <wlr/util/log.h>
+#include <string.h>
 
 void
 die_if_null(void *ptr)
@@ -22,4 +23,13 @@ xzalloc(size_t size)
 	void *ptr = calloc(1, size);
 	die_if_null(ptr);
 	return ptr;
+}
+
+char *
+xstrdup(const char *str)
+{
+	assert(str);
+	char *copy = strdup(str);
+	die_if_null(copy);
+	return copy;
 }
