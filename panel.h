@@ -32,6 +32,7 @@ enum widget_type {
 	WIDGET_TASKBAR,
 	WIDGET_CLOCK,
 	WIDGET_KBDLAYOUT,
+	WIDGET_SNI, /* Status Notifier Items (system tray) */
 	WIDGET_PLUGINS_END,
 
 	/* Other */
@@ -60,6 +61,15 @@ struct clock {
 
 struct kbdlayout {
 	struct widget base;
+};
+
+struct sni {
+	struct widget base;
+	void *conn;      /* DBusConnection *, to avoid dbus.h in panel.h */
+	bool is_watcher; /* true if we own org.kde.StatusNotifierWatcher */
+	bool host_registered;
+	int unix_fd; /* D-Bus socket fd for polling */
+	struct wl_list items; /* internal list of sni_item */
 };
 
 struct taskbar {
@@ -137,6 +147,7 @@ enum {
 	FD_WAYLAND,
 	FD_SIGNAL,
 	FD_CLOCK,
+	FD_SNI, /* D-Bus fd for status notifier */
 
 	NR_FDS,
 };
@@ -206,6 +217,11 @@ void plugin_startmenu_pointer_motion(struct startmenu *menu, int y);
 void plugin_startmenu_pointer_leave(struct startmenu *menu);
 void plugin_startmenu_popup_click(struct startmenu *menu, int y);
 void plugin_startmenu_scroll(struct startmenu *menu, double delta);
+
+void plugin_sni_create(struct panel *panel);
+void plugin_sni_update(struct panel *panel);
+void plugin_sni_dispatch(struct panel *panel);
+void plugin_sni_destroy(struct sni *sni);
 
 void widget_on_left_button_press(struct widget *widget, struct seat *seat);
 char *widget_type(enum widget_type type);

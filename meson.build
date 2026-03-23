@@ -20,6 +20,7 @@ add_project_arguments(
 
 cyaml = dependency('libcyaml')
 cairo = dependency('cairo')
+dbus = dependency('dbus-1')
 pango = dependency('pango')
 pangocairo = dependency('pangocairo')
 glib = dependency('glib-2.0')
@@ -47,6 +48,7 @@ sources = files(
 
   'plugin-clock.c',
   'plugin-kbdlayout.c',
+  'plugin-sni.c',
   'plugin-startmenu.c',
   'plugin-taskbar.c',
 )
@@ -86,6 +88,7 @@ executable(
   dependencies: [
     cairo,
     cyaml,
+    dbus,
     pango,
     pangocairo,
     glib,
