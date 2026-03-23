@@ -32,6 +32,7 @@ enum widget_type {
 	WIDGET_TASKBAR,
 	WIDGET_CLOCK,
 	WIDGET_KBDLAYOUT,
+	WIDGET_BATTERY,
 	WIDGET_PLUGINS_END,
 
 	/* Other */
@@ -59,6 +60,10 @@ struct clock {
 };
 
 struct kbdlayout {
+	struct widget base;
+};
+
+struct battery {
 	struct widget base;
 };
 
@@ -137,6 +142,7 @@ enum {
 	FD_WAYLAND,
 	FD_SIGNAL,
 	FD_CLOCK,
+	FD_BATTERY,
 
 	NR_FDS,
 };
@@ -168,6 +174,7 @@ struct panel {
 	struct pool_buffer *current_buffer;
 
 	char kbd_layout[64]; /* current keyboard layout name */
+	char battery_path[64]; /* path to battery capacity file */
 
 	struct conf *conf;
 	char *message;
@@ -196,6 +203,9 @@ void plugin_clock_create(struct panel *panel);
 
 void plugin_kbdlayout_update(struct panel *panel);
 void plugin_kbdlayout_create(struct panel *panel);
+
+void plugin_battery_create(struct panel *panel);
+void plugin_battery_update(struct panel *panel);
 
 void plugin_startmenu_create(struct panel *panel);
 void plugin_startmenu_update(struct panel *panel);

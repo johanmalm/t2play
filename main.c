@@ -15,6 +15,7 @@
 #ifdef __FreeBSD__
 #include <sys/event.h> /* For signalfd() */
 #endif
+#include <sys/inotify.h>
 #include <sys/signalfd.h>
 #include <sys/stat.h>
 #include <sys/timerfd.h>
@@ -47,6 +48,8 @@ init_plugins(struct panel *panel)
 			plugin_clock_create(panel);
 		} else if (*p == 'K') {
 			plugin_kbdlayout_create(panel);
+		} else if (*p == 'B') {
+			plugin_battery_create(panel);
 		} else {
 			wlr_log(WLR_ERROR, "unknown panel_items code '%c'", *p);
 		}
@@ -292,6 +295,7 @@ panel_destroy(struct panel *panel)
 
 	close_pollfd(&panel->pollfds[FD_SIGNAL]);
 	close_pollfd(&panel->pollfds[FD_CLOCK]);
+	close_pollfd(&panel->pollfds[FD_BATTERY]);
 }
 
 static void
@@ -925,6 +929,26 @@ panel_setup(struct panel *panel)
 		panel->pollfds[FD_CLOCK].fd = -1;
 	}
 
+	if (panel->conf->panel_items && strchr(panel->conf->panel_items, 'B')
+			&& panel->battery_path[0]) {
+		int ifd = inotify_init1(IN_CLOEXEC | IN_NONBLOCK);
+		if (ifd < 0) {
+			wlr_log(WLR_ERROR, "inotify_init1 failed for battery");
+			panel->pollfds[FD_BATTERY].fd = -1;
+		} else if (inotify_add_watch(ifd, panel->battery_path,
+				IN_MODIFY) < 0) {
+			wlr_log(WLR_ERROR, "inotify_add_watch failed for %s",
+				panel->battery_path);
+			close(ifd);
+			panel->pollfds[FD_BATTERY].fd = -1;
+		} else {
+			panel->pollfds[FD_BATTERY].fd = ifd;
+			panel->pollfds[FD_BATTERY].events = POLLIN;
+		}
+	} else {
+		panel->pollfds[FD_BATTERY].fd = -1;
+	}
+
 	sigset_t mask;
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGINT);
@@ -948,6 +972,7 @@ panel_run(struct panel *panel)
 	plugin_clock_update(panel);
 	plugin_startmenu_update(panel);
 	plugin_kbdlayout_update(panel);
+	plugin_battery_update(panel);
 
 	render_frame(panel);
 	while (panel->run_display) {
@@ -977,6 +1002,16 @@ panel_run(struct panel *panel)
 			uint64_t exp;
 			read(panel->pollfds[FD_CLOCK].fd, &exp, sizeof(exp));
 			plugin_clock_update(panel);
+			render_frame(panel);
+		}
+		if (panel->pollfds[FD_BATTERY].revents & POLLIN) {
+			/* Drain all pending inotify events before updating */
+			char ibuf[sizeof(struct inotify_event) + NAME_MAX + 1];
+			while (read(panel->pollfds[FD_BATTERY].fd, ibuf,
+					sizeof(ibuf)) > 0) {
+				/* discard event data; only the notification matters */
+			}
+			plugin_battery_update(panel);
 			render_frame(panel);
 		}
 	}
