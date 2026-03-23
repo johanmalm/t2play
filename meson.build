@@ -47,6 +47,7 @@ sources = files(
 
   'plugin-clock.c',
   'plugin-kbdlayout.c',
+  'plugin-battery.c',
   'plugin-startmenu.c',
   'plugin-taskbar.c',
 )
