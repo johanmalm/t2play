@@ -4,7 +4,6 @@
 #include <cairo.h>
 #include <getopt.h>
 #include <glib.h>
-#include <limits.h>
 #include <pango/pangocairo.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -15,7 +14,6 @@
 #ifdef __FreeBSD__
 #include <sys/event.h> /* For signalfd() */
 #endif
-#include <sys/inotify.h>
 #include <sys/signalfd.h>
 #include <sys/stat.h>
 #include <sys/timerfd.h>
@@ -931,19 +929,24 @@ panel_setup(struct panel *panel)
 
 	if (panel->conf->panel_items && strchr(panel->conf->panel_items, 'B')
 			&& panel->battery_path[0]) {
-		int ifd = inotify_init1(IN_CLOEXEC | IN_NONBLOCK);
-		if (ifd < 0) {
-			wlr_log(WLR_ERROR, "inotify_init1 failed for battery");
-			panel->pollfds[FD_BATTERY].fd = -1;
-		} else if (inotify_add_watch(ifd, panel->battery_path,
-				IN_MODIFY) < 0) {
-			wlr_log(WLR_ERROR, "inotify_add_watch failed for %s",
-				panel->battery_path);
-			close(ifd);
+		int tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
+		if (tfd < 0) {
+			wlr_log(WLR_ERROR, "timerfd_create failed for battery");
 			panel->pollfds[FD_BATTERY].fd = -1;
 		} else {
-			panel->pollfds[FD_BATTERY].fd = ifd;
-			panel->pollfds[FD_BATTERY].events = POLLIN;
+			struct itimerspec battery_timer = {
+				.it_interval.tv_sec = 30,
+				.it_value.tv_sec = 30,
+			};
+			if (timerfd_settime(tfd, 0, &battery_timer, NULL) < 0) {
+				wlr_log(WLR_ERROR,
+					"timerfd_settime failed for battery");
+				close(tfd);
+				panel->pollfds[FD_BATTERY].fd = -1;
+			} else {
+				panel->pollfds[FD_BATTERY].fd = tfd;
+				panel->pollfds[FD_BATTERY].events = POLLIN;
+			}
 		}
 	} else {
 		panel->pollfds[FD_BATTERY].fd = -1;
@@ -1005,12 +1008,8 @@ panel_run(struct panel *panel)
 			render_frame(panel);
 		}
 		if (panel->pollfds[FD_BATTERY].revents & POLLIN) {
-			/* Drain all pending inotify events before updating */
-			char ibuf[sizeof(struct inotify_event) + NAME_MAX + 1];
-			while (read(panel->pollfds[FD_BATTERY].fd, ibuf,
-					sizeof(ibuf)) > 0) {
-				/* discard event data; only the notification matters */
-			}
+			uint64_t exp;
+			read(panel->pollfds[FD_BATTERY].fd, &exp, sizeof(exp));
 			plugin_battery_update(panel);
 			render_frame(panel);
 		}
