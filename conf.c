@@ -152,7 +152,7 @@ conf_init(struct conf *conf)
 	conf->text = 0xFFFFFFFF;
 	conf->button_background = 0x4A4A4AFF;
 	conf->button_active = 0x5A8AC6FF;
-	conf->panel_items = xstrdup("STKC");
+	conf->panel_items = xstrdup("STBKC");
 }
 
 void
