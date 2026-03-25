@@ -84,6 +84,7 @@ endforeach
 executable(
   meson.project_name(),
   sources,
+  include_directories: 'include',
   dependencies: [
     cairo,
     cyaml,
