@@ -572,6 +572,13 @@ wl_keyboard_keymap(void *data, struct wl_keyboard *keyboard, uint32_t format,
 			xkb_state_unref(seat->xkb_state);
 		}
 		seat->xkb_state = xkb_state_new(seat->xkb_keymap);
+		const char *layout_name =
+			xkb_keymap_layout_get_name(seat->xkb_keymap, 0);
+		if (layout_name) {
+			snprintf(seat->panel->kbd_layout,
+				sizeof(seat->panel->kbd_layout),
+				"%s", layout_name);
+		}
 	}
 }
 
