@@ -35,22 +35,7 @@ libsfdo_desktop = dependency('libsfdo-desktop')
 libsfdo_basedir = dependency('libsfdo-basedir')
 xkbcommon = dependency('xkbcommon')
 
-sources = files(
-  'conf.c',
-  'main.c',
-  'mem.c',
-  'pool.c',
-  'string-helpers.c',
-  'util.c',
-  'widget.c',
-  'hex.c',
-
-  'plugin-clock.c',
-  'plugin-kbdlayout.c',
-  'plugin-battery.c',
-  'plugin-startmenu.c',
-  'plugin-taskbar.c',
-)
+subdir('src')
 
 wl_protocol_dir = wayland_protos.get_variable('pkgdatadir')
 wayland_scanner = find_program(
