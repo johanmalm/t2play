@@ -5,11 +5,11 @@
 #include <stdlib.h>
 #include <wlr/util/log.h>
 #include <unistd.h>
+#include "common/array.h"
+#include "common/mem.h"
+#include "common/string-helpers.h"
+#include "common/hex.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
-#include "array.h"
-#include "mem.h"
-#include "string-helpers.h"
-#include "hex.h"
 
 struct yaml_conf {
 	/* colors */

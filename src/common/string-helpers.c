@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
-#include "string-helpers.h"
+#include "common/string-helpers.h"
 #include <stdarg.h>
 #include <stdio.h>
-#include "mem.h"
+#include "common/mem.h"
 
 bool
 string_null_or_empty(const char *s)

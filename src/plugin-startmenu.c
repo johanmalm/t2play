@@ -11,9 +11,9 @@
 #include <unistd.h>
 #include <wlr/util/log.h>
 #include "conf.h"
-#include "mem.h"
+#include "common/mem.h"
 #include "panel.h"
-#include "string-helpers.h"
+#include "common/string-helpers.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 

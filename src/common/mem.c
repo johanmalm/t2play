@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #define _POSIX_C_SOURCE 200809L
-#include "mem.h"
+#include "common/mem.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>

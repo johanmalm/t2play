@@ -28,7 +28,7 @@
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 #include "conf.h"
-#include "mem.h"
+#include "common/mem.h"
 #include "panel.h"
 
 static void

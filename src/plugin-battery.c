@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "conf.h"
-#include "mem.h"
+#include "common/mem.h"
 #include "panel.h"
 
 static void

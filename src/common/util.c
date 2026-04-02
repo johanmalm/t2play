@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <wlr/util/log.h>
 #include "panel.h"
-#include "string-helpers.h"
+#include "common/string-helpers.h"
 
 PangoRectangle
 get_text_size(const PangoFontDescription *desc, const char *string)
