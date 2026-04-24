@@ -18,9 +18,10 @@ struct conf {
 
 	/* other */
 	char *panel_items;
+	int taskbar_padding;
+	int taskbar_spacing;
 };
 
-#define BUTTON_PADDING 8
 #define BUTTON_MAX_WIDTH 200
 #define PANEL_HEIGHT 30
 

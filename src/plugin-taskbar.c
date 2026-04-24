@@ -8,10 +8,10 @@
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 
 static struct wlr_box
-button_size(PangoRectangle rect)
+button_size(PangoRectangle rect, int padding)
 {
 	struct wlr_box box = {
-		.width = rect.width + 2 * BUTTON_PADDING,
+		.width = rect.width + 2 * padding,
 		.height = PANEL_HEIGHT,
 	};
 	box.width = MIN(box.width, BUTTON_MAX_WIDTH);
@@ -35,7 +35,8 @@ toplevel_update_surface(struct toplevel *toplevel)
 		: (toplevel->app_id ? toplevel->app_id : "?");
 	PangoRectangle rect =
 		get_text_size(panel->conf->font_description, label);
-	struct wlr_box box = button_size(rect);
+	int padding = panel->conf->taskbar_padding;
+	struct wlr_box box = button_size(rect, padding);
 
 	widget->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
 		box.width, box.height);
@@ -54,7 +55,7 @@ toplevel_update_surface(struct toplevel *toplevel)
 
 	/* Draw text */
 	cairo_set_source_u32(cairo, panel->conf->text);
-	cairo_move_to(cairo, BUTTON_PADDING, (box.height - rect.height) / 2.0);
+	cairo_move_to(cairo, padding, (box.height - rect.height) / 2.0);
 	render_text(cairo, panel->conf->font_description, 1, false, "%s",
 		label);
 	cairo_destroy(cairo);
