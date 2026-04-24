@@ -20,8 +20,8 @@ struct yaml_conf {
 
 	/* other */
 	char *panel_items;
-	int taskbar_padding;
-	int taskbar_spacing;
+	int *taskbar_padding;
+	int *taskbar_spacing;
 };
 
 static const cyaml_schema_field_t yaml_conf_fields[] = {
@@ -31,8 +31,8 @@ static const cyaml_schema_field_t yaml_conf_fields[] = {
 	CYAML_FIELD_STRING_PTR("button_active", CYAML_FLAG_OPTIONAL, struct yaml_conf, button_active, 0, CYAML_UNLIMITED),
 
 	CYAML_FIELD_STRING_PTR("panel_items", CYAML_FLAG_OPTIONAL, struct yaml_conf, panel_items, 0, CYAML_UNLIMITED),
-	CYAML_FIELD_INT("taskbar_padding", CYAML_FLAG_OPTIONAL, struct yaml_conf, taskbar_padding),
-	CYAML_FIELD_INT("taskbar_spacing", CYAML_FLAG_OPTIONAL, struct yaml_conf, taskbar_spacing),
+	CYAML_FIELD_INT("taskbar_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, taskbar_padding),
+	CYAML_FIELD_INT("taskbar_spacing", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, taskbar_spacing),
 	CYAML_FIELD_END
 };
 
@@ -60,10 +60,10 @@ parse(struct conf *conf, struct yaml_conf *data)
 		xstrdup_replace(conf->panel_items, data->panel_items);
 	}
 	if (data->taskbar_padding) {
-		conf->taskbar_padding = data->taskbar_padding;
+		conf->taskbar_padding = *data->taskbar_padding;
 	}
 	if (data->taskbar_spacing) {
-		conf->taskbar_spacing = data->taskbar_spacing;
+		conf->taskbar_spacing = *data->taskbar_spacing;
 	}
 }
 
