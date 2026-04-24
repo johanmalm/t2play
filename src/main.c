@@ -99,13 +99,14 @@ update_widget_positions(struct panel *panel)
 
 		// TODO: Set toplevel widths more intelligently
 
+		int spacing = panel->conf->taskbar_spacing;
 		x = taskbar->x;
 		wl_list_for_each(widget, &panel->widgets, link) {
 			if (widget->type != WIDGET_TOPLEVEL) {
 				continue;
 			}
 			widget->x = x;
-			x += widget->width;
+			x += widget->width + spacing;
 		}
 	}
 }
