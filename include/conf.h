@@ -18,6 +18,7 @@ struct conf {
 
 	/* other */
 	char *panel_items;
+	char *startmenu_layout;
 	int taskbar_padding;
 	int taskbar_spacing;
 };

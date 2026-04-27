@@ -3,5 +3,6 @@ background: '#323232FF'
 text: '#FFFFFFFF'
 button_background: '#4A4A4AFF'
 button_active: '#5A8AC6FF'
-# taskbar_padding: 8
-# taskbar_spacing: 0
+taskbar_padding: 8
+taskbar_spacing: 2
+startmenu_layout: '<vbox><applist/><search/></vbox>'

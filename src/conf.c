@@ -20,6 +20,7 @@ struct yaml_conf {
 
 	/* other */
 	char *panel_items;
+	char *startmenu_layout;
 	int taskbar_padding;
 	int taskbar_spacing;
 };
@@ -31,6 +32,7 @@ static const cyaml_schema_field_t yaml_conf_fields[] = {
 	CYAML_FIELD_STRING_PTR("button_active", CYAML_FLAG_OPTIONAL, struct yaml_conf, button_active, 0, CYAML_UNLIMITED),
 
 	CYAML_FIELD_STRING_PTR("panel_items", CYAML_FLAG_OPTIONAL, struct yaml_conf, panel_items, 0, CYAML_UNLIMITED),
+	CYAML_FIELD_STRING_PTR("startmenu_layout", CYAML_FLAG_OPTIONAL, struct yaml_conf, startmenu_layout, 0, CYAML_UNLIMITED),
 	CYAML_FIELD_INT("taskbar_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, taskbar_padding),
 	CYAML_FIELD_INT("taskbar_spacing", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, taskbar_spacing),
 	CYAML_FIELD_END
@@ -58,6 +60,9 @@ parse(struct conf *conf, struct yaml_conf *data)
 	PARSE_COLOR(button_active);
 	if (data->panel_items) {
 		xstrdup_replace(conf->panel_items, data->panel_items);
+	}
+	if (data->startmenu_layout) {
+		xstrdup_replace(conf->startmenu_layout, data->startmenu_layout);
 	}
 	if (data->taskbar_padding) {
 		conf->taskbar_padding = data->taskbar_padding;
@@ -163,6 +168,7 @@ conf_init(struct conf *conf)
 	conf->button_background = 0x4A4A4AFF;
 	conf->button_active = 0x5A8AC6FF;
 	conf->panel_items = xstrdup("STBKC");
+	conf->startmenu_layout = xstrdup("<vbox><search/><applist/></vbox>");
 	conf->taskbar_padding = 8;
 	conf->taskbar_spacing = 0;
 }
@@ -172,4 +178,5 @@ conf_destroy(struct conf *conf)
 {
 	pango_font_description_free(conf->font_description);
 	zfree(conf->panel_items);
+	zfree(conf->startmenu_layout);
 }

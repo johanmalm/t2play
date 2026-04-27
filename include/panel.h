@@ -81,6 +81,21 @@ struct startmenu {
 	struct xdg_popup *xdg_popup;
 	struct pool_buffer popup_buffers[2];
 
+	/*
+	 * Popup UI layout (internal to plugin-startmenu.c).
+	 * `ui_root` owns a small widget tree parsed from a tiny XML subset.
+	 * The *_rect fields cache layout results for hit-testing and input.
+	 */
+	void *ui_root;
+	int ui_search_x;
+	int ui_search_y;
+	int ui_search_w;
+	int ui_search_h;
+	int ui_list_x;
+	int ui_list_y;
+	int ui_list_w;
+	int ui_list_h;
+
 	/* Application list loaded from .desktop files */
 	char **app_names;  /* display names */
 	char **app_execs;  /* executable paths (exec arg0) */

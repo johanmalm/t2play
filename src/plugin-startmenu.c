@@ -10,6 +10,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <wlr/util/log.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
 #include "conf.h"
 #include "common/mem.h"
 #include "panel.h"
@@ -22,6 +24,270 @@
 
 /* Maximum number of items visible at once (excluding the search box row) */
 #define MENU_MAX_VISIBLE 12
+
+/* ------------------------- Popup UI mini-framework ------------------------ */
+
+struct sm_rect {
+	int x;
+	int y;
+	int w;
+	int h;
+};
+
+enum sm_node_type {
+	SM_NODE_HBOX,
+	SM_NODE_VBOX,
+	SM_NODE_SEARCH,
+	SM_NODE_APPLIST,
+};
+
+struct sm_node {
+	enum sm_node_type type;
+	struct sm_node **children;
+	int n_children;
+};
+
+static void sm_node_free(struct sm_node *n)
+{
+	if (!n) {
+		return;
+	}
+	for (int i = 0; i < n->n_children; i++) {
+		sm_node_free(n->children[i]);
+	}
+	free(n->children);
+	free(n);
+}
+
+static struct sm_node *sm_node_new(enum sm_node_type type)
+{
+	struct sm_node *n = calloc(1, sizeof(*n));
+	if (!n) {
+		return NULL;
+	}
+	n->type = type;
+	return n;
+}
+
+static bool sm_node_add_child(struct sm_node *parent, struct sm_node *child)
+{
+	if (!parent || !child) {
+		return false;
+	}
+	struct sm_node **new_children =
+		realloc(parent->children, (parent->n_children + 1) * sizeof(*new_children));
+	if (!new_children) {
+		return false;
+	}
+	parent->children = new_children;
+	parent->children[parent->n_children++] = child;
+	return true;
+}
+
+static enum sm_node_type sm_name_to_type(const char *name)
+{
+	if (strcasecmp(name, "vbox") == 0) {
+		return SM_NODE_VBOX;
+	}
+	if (strcasecmp(name, "hbox") == 0) {
+		return SM_NODE_HBOX;
+	}
+	if (strcasecmp(name, "search") == 0) {
+		return SM_NODE_SEARCH;
+	}
+	if (strcasecmp(name, "applist") == 0) {
+		return SM_NODE_APPLIST;
+	}
+	return -1;
+}
+
+static struct sm_node *sm_from_xml_node(xmlNode *xn)
+{
+	if (!xn || xn->type != XML_ELEMENT_NODE) {
+		return NULL;
+	}
+
+	const char *name = (const char *)xn->name;
+	enum sm_node_type type = sm_name_to_type(name);
+	if ((int)type < 0) {
+		/* Forgiving: unknown tags are ignored, except the toplevel. */
+		return NULL;
+	}
+
+	struct sm_node *node = sm_node_new(type);
+	if (!node) {
+		return NULL;
+	}
+
+	if (type == SM_NODE_SEARCH || type == SM_NODE_APPLIST) {
+		/* Forgiving: ignore children even if present. */
+		return node;
+	}
+
+	for (xmlNode *c = xn->children; c; c = c->next) {
+		if (c->type != XML_ELEMENT_NODE) {
+			continue;
+		}
+		enum sm_node_type ct = sm_name_to_type((const char *)c->name);
+		if ((int)ct < 0) {
+			/* Forgiving: ignore unknown elements in containers. */
+			continue;
+		}
+		struct sm_node *child = sm_from_xml_node(c);
+		if (!child) {
+			continue;
+		}
+		if (!sm_node_add_child(node, child)) {
+			sm_node_free(child);
+			sm_node_free(node);
+			return NULL;
+		}
+	}
+
+	return node;
+}
+
+static struct sm_node *sm_parse_layout(const char *xml)
+{
+	if (string_null_or_empty(xml)) {
+		return NULL;
+	}
+
+	xmlDocPtr doc = xmlReadMemory(
+		xml,
+		(int)strlen(xml),
+		"startmenu_layout.xml",
+		NULL,
+		XML_PARSE_NONET | XML_PARSE_NOERROR | XML_PARSE_NOWARNING | XML_PARSE_NOBLANKS
+	);
+	if (!doc) {
+		return NULL;
+	}
+
+	xmlNode *root = xmlDocGetRootElement(doc);
+	if (!root || root->type != XML_ELEMENT_NODE) {
+		xmlFreeDoc(doc);
+		return NULL;
+	}
+	enum sm_node_type root_type = sm_name_to_type((const char *)root->name);
+	if (root_type != SM_NODE_VBOX && root_type != SM_NODE_HBOX) {
+		xmlFreeDoc(doc);
+		return NULL;
+	}
+
+	struct sm_node *out = sm_from_xml_node(root);
+	xmlFreeDoc(doc);
+	return out;
+}
+
+static void sm_measure(struct startmenu *menu, const struct sm_node *n,
+	int *out_w, int *out_h)
+{
+	if (!n) {
+		*out_w = 0;
+		*out_h = 0;
+		return;
+	}
+
+	switch (n->type) {
+	case SM_NODE_SEARCH:
+		*out_w = 0;
+		*out_h = MENU_ITEM_HEIGHT;
+		return;
+	case SM_NODE_APPLIST:
+		*out_w = 0;
+		*out_h = menu->n_visible * MENU_ITEM_HEIGHT;
+		return;
+	case SM_NODE_VBOX: {
+		int w = 0, h = 0;
+		for (int i = 0; i < n->n_children; i++) {
+			int cw = 0, ch = 0;
+			sm_measure(menu, n->children[i], &cw, &ch);
+			if (cw > w) {
+				w = cw;
+			}
+			h += ch;
+		}
+		*out_w = w;
+		*out_h = h;
+		return;
+	}
+	case SM_NODE_HBOX: {
+		int h = 0;
+		for (int i = 0; i < n->n_children; i++) {
+			int cw = 0, ch = 0;
+			sm_measure(menu, n->children[i], &cw, &ch);
+			if (ch > h) {
+				h = ch;
+			}
+		}
+		*out_w = 0;
+		*out_h = h;
+		return;
+	}
+	}
+}
+
+static void sm_layout_and_cache(struct startmenu *menu, const struct sm_node *n,
+	struct sm_rect r)
+{
+	if (!n) {
+		return;
+	}
+
+	switch (n->type) {
+	case SM_NODE_SEARCH:
+		menu->ui_search_x = r.x;
+		menu->ui_search_y = r.y;
+		menu->ui_search_w = r.w;
+		menu->ui_search_h = r.h;
+		return;
+	case SM_NODE_APPLIST:
+		menu->ui_list_x = r.x;
+		menu->ui_list_y = r.y;
+		menu->ui_list_w = r.w;
+		menu->ui_list_h = r.h;
+		return;
+	case SM_NODE_VBOX: {
+		int y = r.y;
+		for (int i = 0; i < n->n_children; i++) {
+			int cw = 0, ch = 0;
+			sm_measure(menu, n->children[i], &cw, &ch);
+			struct sm_rect cr = {
+				.x = r.x,
+				.y = y,
+				.w = r.w,
+				.h = ch,
+			};
+			sm_layout_and_cache(menu, n->children[i], cr);
+			y += ch;
+		}
+		return;
+	}
+	case SM_NODE_HBOX: {
+		int x = r.x;
+		int n_children = n->n_children > 0 ? n->n_children : 1;
+		int base_w = r.w / n_children;
+		int rem = r.w - base_w * n_children;
+		for (int i = 0; i < n->n_children; i++) {
+			int cw = 0, ch = 0;
+			sm_measure(menu, n->children[i], &cw, &ch);
+			(void)cw;
+			(void)ch;
+			int w = base_w + (i == n->n_children - 1 ? rem : 0);
+			struct sm_rect cr = {
+				.x = x,
+				.y = r.y,
+				.w = w,
+				.h = r.h,
+			};
+			sm_layout_and_cache(menu, n->children[i], cr);
+			x += w;
+		}
+		return;
+	}
+	}
+}
 
 /* Forward declaration */
 static void startmenu_close(struct startmenu *menu);
@@ -146,8 +412,36 @@ startmenu_render_popup(struct startmenu *menu)
 {
 	struct panel *panel = menu->base.panel;
 	int width = MENU_WIDTH;
-	int n_rows = 1 + menu->n_visible; /* search box + item rows */
-	int height = n_rows * MENU_ITEM_HEIGHT;
+	int height = (1 + menu->n_visible) * MENU_ITEM_HEIGHT;
+
+	/* Layout pass */
+	menu->ui_search_x = 0;
+	menu->ui_search_y = 0;
+	menu->ui_search_w = 0;
+	menu->ui_search_h = 0;
+	menu->ui_list_x = 0;
+	menu->ui_list_y = 0;
+	menu->ui_list_w = 0;
+	menu->ui_list_h = 0;
+	if (menu->ui_root) {
+		int mw = 0, mh = 0;
+		sm_measure(menu, (const struct sm_node *)menu->ui_root, &mw, &mh);
+		if (mh > 0) {
+			height = mh;
+		}
+		sm_layout_and_cache(menu, (const struct sm_node *)menu->ui_root,
+			(struct sm_rect){ .x = 0, .y = 0, .w = width, .h = height });
+	} else {
+		/* Fallback to the classic layout. */
+		menu->ui_search_x = 0;
+		menu->ui_search_y = 0;
+		menu->ui_search_w = width;
+		menu->ui_search_h = MENU_ITEM_HEIGHT;
+		menu->ui_list_x = 0;
+		menu->ui_list_y = MENU_ITEM_HEIGHT;
+		menu->ui_list_w = width;
+		menu->ui_list_h = menu->n_visible * MENU_ITEM_HEIGHT;
+	}
 
 	struct pool_buffer *buffer = get_next_buffer(panel->shm,
 		menu->popup_buffers, width, height);
@@ -161,125 +455,128 @@ startmenu_render_popup(struct startmenu *menu)
 	cairo_paint(cr);
 	cairo_restore(cr);
 
-	/* --- Row 0: search box --- */
-	cairo_set_source_u32(cr, panel->conf->button_background);
-	cairo_rectangle(cr, 0, 0, width, MENU_ITEM_HEIGHT);
-	cairo_fill(cr);
-
-	/* Draw a slightly lighter border around the search box */
-	cairo_set_source_u32(cr, panel->conf->text);
-	cairo_set_line_width(cr, 1.0);
-	cairo_rectangle(cr, 1, 1, width - 2, MENU_ITEM_HEIGHT - 2);
-	cairo_stroke(cr);
-
-	/* Search text with cursor */
-	PangoRectangle search_rect = get_text_size(panel->conf->font_description,
-		*menu->search ? menu->search : " ");
-	cairo_set_source_u32(cr, panel->conf->text);
-	cairo_move_to(cr, panel->conf->taskbar_padding,
-		(MENU_ITEM_HEIGHT - search_rect.height) / 2.0);
-	if (*menu->search) {
-		render_text(cr, panel->conf->font_description, 1, false, "%s",
-			menu->search);
-	} else {
-		/* Placeholder text */
-		render_text(cr, panel->conf->font_description, 1, false,
-			"Search...");
-	}
-
-	/* --- Item rows --- */
-	/*
-	 * menu->selected is an absolute index into filtered[].
-	 * menu->hover is a visible row index (0..n_visible-1).
-	 * Convert both to a visible row index for highlighting.
-	 */
-	int highlighted = -1;
-	if (menu->selected >= 0) {
-		int row_of_selected = menu->selected - menu->scroll_offset;
-		if (row_of_selected >= 0 && row_of_selected < menu->n_visible) {
-			highlighted = row_of_selected;
-		}
-	} else if (menu->hover >= 0) {
-		highlighted = menu->hover;
-	}
-
-	if (menu->n_filtered == 0) {
-		/* Show a "no results" message in the first item row */
-		int y = MENU_ITEM_HEIGHT;
+	/* --- Search widget --- */
+	if (menu->ui_search_h > 0) {
+		struct sm_rect r = {
+			.x = menu->ui_search_x,
+			.y = menu->ui_search_y,
+			.w = menu->ui_search_w ? menu->ui_search_w : width,
+			.h = menu->ui_search_h,
+		};
 		cairo_set_source_u32(cr, panel->conf->button_background);
-		cairo_rectangle(cr, 0, y, width, MENU_ITEM_HEIGHT);
+		cairo_rectangle(cr, r.x, r.y, r.w, r.h);
 		cairo_fill(cr);
-		PangoRectangle text_rect = get_text_size(
-			panel->conf->font_description, "No results");
+
 		cairo_set_source_u32(cr, panel->conf->text);
-		cairo_move_to(cr, panel->conf->taskbar_padding,
-			y + (MENU_ITEM_HEIGHT - text_rect.height) / 2.0);
-		render_text(cr, panel->conf->font_description, 1, false,
-			"No results");
-		/* Fill remaining rows with background */
-		for (int row = 1; row < menu->n_visible; row++) {
-			y = (row + 1) * MENU_ITEM_HEIGHT;
-			cairo_set_source_u32(cr, panel->conf->button_background);
-			cairo_rectangle(cr, 0, y, width, MENU_ITEM_HEIGHT);
-			cairo_fill(cr);
+		cairo_set_line_width(cr, 1.0);
+		cairo_rectangle(cr, r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+		cairo_stroke(cr);
+
+		PangoRectangle search_rect = get_text_size(panel->conf->font_description,
+			*menu->search ? menu->search : " ");
+		cairo_set_source_u32(cr, panel->conf->text);
+		cairo_move_to(cr, r.x + panel->conf->taskbar_padding,
+			r.y + (r.h - search_rect.height) / 2.0);
+		if (*menu->search) {
+			render_text(cr, panel->conf->font_description, 1, false, "%s",
+				menu->search);
+		} else {
+			render_text(cr, panel->conf->font_description, 1, false,
+				"Search...");
 		}
-	} else {
-		for (int row = 0; row < menu->n_visible; row++) {
-			int idx = menu->scroll_offset + row;
-			int y = (row + 1) * MENU_ITEM_HEIGHT;
+	}
 
-			if (idx >= menu->n_filtered) {
-				/* Empty row below last matching item */
-				cairo_set_source_u32(cr,
-					panel->conf->button_background);
-				cairo_rectangle(cr, 0, y, width,
-					MENU_ITEM_HEIGHT);
-				cairo_fill(cr);
-				continue;
-			}
+	/* --- App list widget --- */
+	if (menu->ui_list_h > 0) {
+		struct sm_rect r = {
+			.x = menu->ui_list_x,
+			.y = menu->ui_list_y,
+			.w = menu->ui_list_w ? menu->ui_list_w : width,
+			.h = menu->ui_list_h,
+		};
+		int visible_rows = r.h / MENU_ITEM_HEIGHT;
+		if (visible_rows < 1) {
+			visible_rows = 1;
+		}
 
-			if (row == highlighted) {
-				cairo_set_source_u32(cr,
-					panel->conf->button_active);
-			} else {
-				cairo_set_source_u32(cr,
-					panel->conf->button_background);
+		int highlighted = -1;
+		if (menu->selected >= 0) {
+			int row_of_selected = menu->selected - menu->scroll_offset;
+			if (row_of_selected >= 0 && row_of_selected < visible_rows) {
+				highlighted = row_of_selected;
 			}
-			cairo_rectangle(cr, 0, y, width, MENU_ITEM_HEIGHT);
+		} else if (menu->hover >= 0) {
+			highlighted = menu->hover;
+		}
+
+		if (menu->n_filtered == 0) {
+			int y = r.y;
+			cairo_set_source_u32(cr, panel->conf->button_background);
+			cairo_rectangle(cr, r.x, y, r.w, MENU_ITEM_HEIGHT);
 			cairo_fill(cr);
-
-			int app_idx = menu->filtered[idx];
-			const char *name = menu->app_names[app_idx];
 			PangoRectangle text_rect = get_text_size(
-				panel->conf->font_description, name);
+				panel->conf->font_description, "No results");
 			cairo_set_source_u32(cr, panel->conf->text);
-			cairo_move_to(cr, panel->conf->taskbar_padding,
+			cairo_move_to(cr, r.x + panel->conf->taskbar_padding,
 				y + (MENU_ITEM_HEIGHT - text_rect.height) / 2.0);
 			render_text(cr, panel->conf->font_description, 1, false,
-				"%s", name);
-		}
-	}
+				"No results");
+			for (int row = 1; row < visible_rows; row++) {
+				y = r.y + row * MENU_ITEM_HEIGHT;
+				cairo_set_source_u32(cr, panel->conf->button_background);
+				cairo_rectangle(cr, r.x, y, r.w, MENU_ITEM_HEIGHT);
+				cairo_fill(cr);
+			}
+		} else {
+			for (int row = 0; row < visible_rows; row++) {
+				int idx = menu->scroll_offset + row;
+				int y = r.y + row * MENU_ITEM_HEIGHT;
 
-	/* Scroll indicators */
-	if (menu->scroll_offset > 0) {
-		/* Up arrow at top-right of first item row */
-		int y = MENU_ITEM_HEIGHT;
-		PangoRectangle arr_rect =
-			get_text_size(panel->conf->font_description, "▲");
-		cairo_set_source_u32(cr, panel->conf->text);
-		cairo_move_to(cr, width - arr_rect.width - panel->conf->taskbar_padding,
-			y + (MENU_ITEM_HEIGHT - arr_rect.height) / 2.0);
-		render_text(cr, panel->conf->font_description, 1, false, "▲");
-	}
-	if (menu->scroll_offset + menu->n_visible < menu->n_filtered) {
-		/* Down arrow at bottom-right of last item row */
-		int y = (menu->n_visible) * MENU_ITEM_HEIGHT;
-		PangoRectangle arr_rect =
-			get_text_size(panel->conf->font_description, "▼");
-		cairo_set_source_u32(cr, panel->conf->text);
-		cairo_move_to(cr, width - arr_rect.width - panel->conf->taskbar_padding,
-			y + (MENU_ITEM_HEIGHT - arr_rect.height) / 2.0);
-		render_text(cr, panel->conf->font_description, 1, false, "▼");
+				if (idx >= menu->n_filtered) {
+					cairo_set_source_u32(cr, panel->conf->button_background);
+					cairo_rectangle(cr, r.x, y, r.w, MENU_ITEM_HEIGHT);
+					cairo_fill(cr);
+					continue;
+				}
+
+				if (row == highlighted) {
+					cairo_set_source_u32(cr, panel->conf->button_active);
+				} else {
+					cairo_set_source_u32(cr, panel->conf->button_background);
+				}
+				cairo_rectangle(cr, r.x, y, r.w, MENU_ITEM_HEIGHT);
+				cairo_fill(cr);
+
+				int app_idx = menu->filtered[idx];
+				const char *name = menu->app_names[app_idx];
+				PangoRectangle text_rect = get_text_size(
+					panel->conf->font_description, name);
+				cairo_set_source_u32(cr, panel->conf->text);
+				cairo_move_to(cr, r.x + panel->conf->taskbar_padding,
+					y + (MENU_ITEM_HEIGHT - text_rect.height) / 2.0);
+				render_text(cr, panel->conf->font_description, 1, false,
+					"%s", name);
+			}
+		}
+
+		if (menu->scroll_offset > 0) {
+			int y = r.y;
+			PangoRectangle arr_rect =
+				get_text_size(panel->conf->font_description, "▲");
+			cairo_set_source_u32(cr, panel->conf->text);
+			cairo_move_to(cr, r.x + r.w - arr_rect.width - panel->conf->taskbar_padding,
+				y + (MENU_ITEM_HEIGHT - arr_rect.height) / 2.0);
+			render_text(cr, panel->conf->font_description, 1, false, "▲");
+		}
+		if (menu->scroll_offset + visible_rows < menu->n_filtered) {
+			int y = r.y + (visible_rows - 1) * MENU_ITEM_HEIGHT;
+			PangoRectangle arr_rect =
+				get_text_size(panel->conf->font_description, "▼");
+			cairo_set_source_u32(cr, panel->conf->text);
+			cairo_move_to(cr, r.x + r.w - arr_rect.width - panel->conf->taskbar_padding,
+				y + (MENU_ITEM_HEIGHT - arr_rect.height) / 2.0);
+			render_text(cr, panel->conf->font_description, 1, false, "▼");
+		}
 	}
 
 	wl_surface_set_buffer_scale(menu->popup_surface, 1);
@@ -553,6 +850,13 @@ startmenu_on_left_button_press(struct widget *widget, struct seat *seat)
 		&popup_xdg_surface_listener, menu);
 
 	int popup_height = (1 + menu->n_visible) * MENU_ITEM_HEIGHT;
+	if (menu->ui_root) {
+		int mw = 0, mh = 0;
+		sm_measure(menu, (const struct sm_node *)menu->ui_root, &mw, &mh);
+		if (mh > 0) {
+			popup_height = mh;
+		}
+	}
 	struct xdg_positioner *positioner =
 		xdg_wm_base_create_positioner(panel->xdg_wm_base);
 	xdg_positioner_set_size(positioner, MENU_WIDTH, popup_height);
@@ -698,16 +1002,28 @@ plugin_startmenu_text_input(struct panel *panel, const char *utf8)
 void
 plugin_startmenu_pointer_motion(struct startmenu *menu, int y)
 {
-	/* Row 0 is the search box - no hover for it */
-	if (y < MENU_ITEM_HEIGHT) {
+	/* Search widget - no hover for it */
+	if (y >= menu->ui_search_y && y < menu->ui_search_y + menu->ui_search_h) {
 		if (menu->hover != -1) {
 			menu->hover = -1;
 			startmenu_render_popup(menu);
 		}
 		return;
 	}
-	int row = (y - MENU_ITEM_HEIGHT) / MENU_ITEM_HEIGHT;
-	if (row < 0 || row >= menu->n_visible
+	if (menu->ui_list_h <= 0 || y < menu->ui_list_y
+			|| y >= menu->ui_list_y + menu->ui_list_h) {
+		if (menu->hover != -1) {
+			menu->hover = -1;
+			startmenu_render_popup(menu);
+		}
+		return;
+	}
+	int visible_rows = menu->ui_list_h / MENU_ITEM_HEIGHT;
+	if (visible_rows < 1) {
+		visible_rows = 1;
+	}
+	int row = (y - menu->ui_list_y) / MENU_ITEM_HEIGHT;
+	if (row < 0 || row >= visible_rows
 			|| (menu->scroll_offset + row) >= menu->n_filtered) {
 		row = -1;
 	}
@@ -729,13 +1045,24 @@ plugin_startmenu_pointer_leave(struct startmenu *menu)
 void
 plugin_startmenu_popup_click(struct startmenu *menu, int y)
 {
-	/* Ignore clicks on the search box row */
-	if (y < MENU_ITEM_HEIGHT) {
+	/* Ignore clicks on the search widget */
+	if (y >= menu->ui_search_y && y < menu->ui_search_y + menu->ui_search_h) {
 		return;
 	}
-	int row = (y - MENU_ITEM_HEIGHT) / MENU_ITEM_HEIGHT;
+	if (menu->ui_list_h <= 0 || y < menu->ui_list_y
+			|| y >= menu->ui_list_y + menu->ui_list_h) {
+		return;
+	}
+	int visible_rows = menu->ui_list_h / MENU_ITEM_HEIGHT;
+	if (visible_rows < 1) {
+		visible_rows = 1;
+	}
+	int row = (y - menu->ui_list_y) / MENU_ITEM_HEIGHT;
+	if (row < 0 || row >= visible_rows) {
+		return;
+	}
 	int idx = menu->scroll_offset + row;
-	if (row >= 0 && row < menu->n_visible && idx < menu->n_filtered) {
+	if (idx < menu->n_filtered) {
 		int app_idx = menu->filtered[idx];
 		wlr_log(WLR_DEBUG, "startmenu: launching %s (%s)",
 			menu->app_names[app_idx], menu->app_execs[app_idx]);
@@ -772,6 +1099,9 @@ plugin_startmenu_destroy(struct startmenu *menu)
 {
 	startmenu_close(menu);
 
+	sm_node_free((struct sm_node *)menu->ui_root);
+	menu->ui_root = NULL;
+
 	for (int i = 0; i < menu->n_apps; i++) {
 		free(menu->app_names[i]);
 		free(menu->app_execs[i]);
@@ -805,7 +1135,26 @@ plugin_startmenu_create(struct panel *panel)
 	menu->base.impl = &startmenu_widget_impl;
 	menu->hover = -1;
 	menu->selected = -1;
+	menu->ui_root = NULL;
+	menu->ui_search_x = 0;
+	menu->ui_search_y = 0;
+	menu->ui_search_w = MENU_WIDTH;
+	menu->ui_search_h = MENU_ITEM_HEIGHT;
+	menu->ui_list_x = 0;
+	menu->ui_list_y = MENU_ITEM_HEIGHT;
+	menu->ui_list_w = MENU_WIDTH;
+	menu->ui_list_h = MENU_MAX_VISIBLE * MENU_ITEM_HEIGHT;
 	wl_list_insert(panel->widgets.prev, &menu->base.link);
+
+	/* Default layout: search box above scrollable app list. */
+	const char *layout_xml = panel->conf && panel->conf->startmenu_layout
+		? panel->conf->startmenu_layout
+		: "<vbox><search/><applist/></vbox>";
+	menu->ui_root = sm_parse_layout(layout_xml);
+	if (!menu->ui_root) {
+		wlr_log(WLR_ERROR, "startmenu: failed to parse startmenu_layout, falling back");
+		menu->ui_root = sm_parse_layout("<vbox><search/><applist/></vbox>");
+	}
 
 	load_apps(menu);
 }
