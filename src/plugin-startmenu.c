@@ -122,7 +122,7 @@ startmenu_render_button(struct startmenu *menu)
 
 	const char *label = "^";
 	PangoRectangle rect = get_text_size(panel->conf->font_description, label);
-	widget->width = rect.width + 2 * BUTTON_PADDING;
+	widget->width = rect.width + 2 * panel->conf->taskbar_padding;
 
 	if (widget->surface) {
 		cairo_surface_destroy(widget->surface);
@@ -136,7 +136,7 @@ startmenu_render_button(struct startmenu *menu)
 	cairo_fill(cr);
 
 	cairo_set_source_u32(cr, panel->conf->text);
-	cairo_move_to(cr, BUTTON_PADDING, (panel->height - rect.height) / 2.0);
+	cairo_move_to(cr, panel->conf->taskbar_padding, (panel->height - rect.height) / 2.0);
 	render_text(cr, panel->conf->font_description, 1, false, "%s", label);
 	cairo_destroy(cr);
 }
@@ -176,7 +176,7 @@ startmenu_render_popup(struct startmenu *menu)
 	PangoRectangle search_rect = get_text_size(panel->conf->font_description,
 		*menu->search ? menu->search : " ");
 	cairo_set_source_u32(cr, panel->conf->text);
-	cairo_move_to(cr, BUTTON_PADDING,
+	cairo_move_to(cr, panel->conf->taskbar_padding,
 		(MENU_ITEM_HEIGHT - search_rect.height) / 2.0);
 	if (*menu->search) {
 		render_text(cr, panel->conf->font_description, 1, false, "%s",
@@ -212,7 +212,7 @@ startmenu_render_popup(struct startmenu *menu)
 		PangoRectangle text_rect = get_text_size(
 			panel->conf->font_description, "No results");
 		cairo_set_source_u32(cr, panel->conf->text);
-		cairo_move_to(cr, BUTTON_PADDING,
+		cairo_move_to(cr, panel->conf->taskbar_padding,
 			y + (MENU_ITEM_HEIGHT - text_rect.height) / 2.0);
 		render_text(cr, panel->conf->font_description, 1, false,
 			"No results");
@@ -253,7 +253,7 @@ startmenu_render_popup(struct startmenu *menu)
 			PangoRectangle text_rect = get_text_size(
 				panel->conf->font_description, name);
 			cairo_set_source_u32(cr, panel->conf->text);
-			cairo_move_to(cr, BUTTON_PADDING,
+			cairo_move_to(cr, panel->conf->taskbar_padding,
 				y + (MENU_ITEM_HEIGHT - text_rect.height) / 2.0);
 			render_text(cr, panel->conf->font_description, 1, false,
 				"%s", name);
@@ -267,7 +267,7 @@ startmenu_render_popup(struct startmenu *menu)
 		PangoRectangle arr_rect =
 			get_text_size(panel->conf->font_description, "▲");
 		cairo_set_source_u32(cr, panel->conf->text);
-		cairo_move_to(cr, width - arr_rect.width - BUTTON_PADDING,
+		cairo_move_to(cr, width - arr_rect.width - panel->conf->taskbar_padding,
 			y + (MENU_ITEM_HEIGHT - arr_rect.height) / 2.0);
 		render_text(cr, panel->conf->font_description, 1, false, "▲");
 	}
@@ -277,7 +277,7 @@ startmenu_render_popup(struct startmenu *menu)
 		PangoRectangle arr_rect =
 			get_text_size(panel->conf->font_description, "▼");
 		cairo_set_source_u32(cr, panel->conf->text);
-		cairo_move_to(cr, width - arr_rect.width - BUTTON_PADDING,
+		cairo_move_to(cr, width - arr_rect.width - panel->conf->taskbar_padding,
 			y + (MENU_ITEM_HEIGHT - arr_rect.height) / 2.0);
 		render_text(cr, panel->conf->font_description, 1, false, "▼");
 	}

@@ -9,7 +9,7 @@ kbdlayout_update(struct panel *panel, struct widget *widget)
 	const char *layout = panel->kbd_layout[0] ? panel->kbd_layout : "--";
 
 	PangoRectangle rect = get_text_size(panel->conf->font_description, layout);
-	widget->width = rect.width + 2 * BUTTON_PADDING;
+	widget->width = rect.width + 2 * panel->conf->taskbar_padding;
 	if (widget->surface) {
 		cairo_surface_destroy(widget->surface);
 	}
@@ -18,7 +18,7 @@ kbdlayout_update(struct panel *panel, struct widget *widget)
 
 	cairo_t *cr = cairo_create(widget->surface);
 	cairo_set_source_u32(cr, panel->conf->text);
-	cairo_move_to(cr, BUTTON_PADDING, (panel->height - rect.height) / 2.0);
+	cairo_move_to(cr, panel->conf->taskbar_padding, (panel->height - rect.height) / 2.0);
 	render_text(cr, panel->conf->font_description, 1, false, "%s", layout);
 	cairo_destroy(cr);
 }
