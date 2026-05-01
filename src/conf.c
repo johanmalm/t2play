@@ -49,27 +49,23 @@ static const cyaml_config_t yaml_cyaml_config = {
 	.flags = CYAML_CFG_IGNORE_UNKNOWN_KEYS,
 };
 
-# define PARSE_COLOR(str) if (data->str) { conf->str = parse_hex(data->str); }
+#define PARSE_COL(str) if (data->str) { conf->str = parse_hex(data->str); }
+#define PARSE_STR(str) if (data->str) { xstrdup_replace(conf->str, data->str); }
+#define PARSE_INT(str) if (data->str) { conf->str = data->str; }
 
 static void
 parse(struct conf *conf, struct yaml_conf *data)
 {
-	PARSE_COLOR(background);
-	PARSE_COLOR(text);
-	PARSE_COLOR(button_background);
-	PARSE_COLOR(button_active);
-	if (data->panel_items) {
-		xstrdup_replace(conf->panel_items, data->panel_items);
-	}
-	if (data->startmenu_layout) {
-		xstrdup_replace(conf->startmenu_layout, data->startmenu_layout);
-	}
-	if (data->taskbar_padding) {
-		conf->taskbar_padding = data->taskbar_padding;
-	}
-	if (data->taskbar_spacing) {
-		conf->taskbar_spacing = data->taskbar_spacing;
-	}
+	PARSE_COL(background);
+	PARSE_COL(text);
+	PARSE_COL(button_background);
+	PARSE_COL(button_active);
+
+	PARSE_STR(panel_items);
+	PARSE_STR(startmenu_layout);
+
+	PARSE_INT(taskbar_padding);
+	PARSE_INT(taskbar_spacing);
 }
 
 #undef PARSE_COLOR
