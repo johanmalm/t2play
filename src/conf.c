@@ -18,11 +18,25 @@ struct yaml_conf {
 	char *button_background;
 	char *button_active;
 
-	/* other */
+	/* panel */
 	char *panel_items;
-	char *startmenu_layout;
+
+	/* taskbar */
 	int taskbar_padding;
 	int taskbar_spacing;
+
+	/* startmenu */
+	char *startmenu_layout;
+	int startmenu_padding;
+
+	/* clock */
+	int clock_padding;
+
+	/* battery */
+	int battery_padding;
+
+	/* keyboard */
+	int keyboard_padding;
 };
 
 static const cyaml_schema_field_t yaml_conf_fields[] = {
@@ -32,9 +46,19 @@ static const cyaml_schema_field_t yaml_conf_fields[] = {
 	CYAML_FIELD_STRING_PTR("button_active", CYAML_FLAG_OPTIONAL, struct yaml_conf, button_active, 0, CYAML_UNLIMITED),
 
 	CYAML_FIELD_STRING_PTR("panel_items", CYAML_FLAG_OPTIONAL, struct yaml_conf, panel_items, 0, CYAML_UNLIMITED),
-	CYAML_FIELD_STRING_PTR("startmenu_layout", CYAML_FLAG_OPTIONAL, struct yaml_conf, startmenu_layout, 0, CYAML_UNLIMITED),
+
 	CYAML_FIELD_INT("taskbar_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, taskbar_padding),
 	CYAML_FIELD_INT("taskbar_spacing", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, taskbar_spacing),
+
+	CYAML_FIELD_STRING_PTR("startmenu_layout", CYAML_FLAG_OPTIONAL, struct yaml_conf, startmenu_layout, 0, CYAML_UNLIMITED),
+	CYAML_FIELD_INT("startmenu_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, startmenu_padding),
+
+	CYAML_FIELD_INT("clock_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, clock_padding),
+
+	CYAML_FIELD_INT("battery_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, battery_padding),
+
+	CYAML_FIELD_INT("keyboard_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, battery_padding),
+
 	CYAML_FIELD_END
 };
 
@@ -62,10 +86,18 @@ parse(struct conf *conf, struct yaml_conf *data)
 	PARSE_COL(button_active);
 
 	PARSE_STR(panel_items);
-	PARSE_STR(startmenu_layout);
 
 	PARSE_INT(taskbar_padding);
 	PARSE_INT(taskbar_spacing);
+
+	PARSE_STR(startmenu_layout);
+	PARSE_INT(startmenu_padding);
+
+	PARSE_INT(clock_padding);
+
+	PARSE_INT(battery_padding);
+
+	PARSE_INT(keyboard_padding);
 }
 
 #undef PARSE_COLOR
@@ -159,14 +191,25 @@ conf_init(struct conf *conf)
 		| ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT
 		| ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
 	conf->layer = ZWLR_LAYER_SHELL_V1_LAYER_TOP;
+
 	conf->background = 0x323232FF;
 	conf->text = 0xFFFFFFFF;
 	conf->button_background = 0x4A4A4AFF;
 	conf->button_active = 0x5A8AC6FF;
+
 	conf->panel_items = xstrdup("STBKC");
-	conf->startmenu_layout = xstrdup("<vbox><search/><applist/></vbox>");
+
 	conf->taskbar_padding = 8;
 	conf->taskbar_spacing = 0;
+
+	conf->startmenu_layout = xstrdup("<vbox><search/><applist/></vbox>");
+	conf->startmenu_padding = 8;
+
+	conf->clock_padding = 8;
+
+	conf->battery_padding = 8;
+
+	conf->keyboard_padding = 8;
 }
 
 void

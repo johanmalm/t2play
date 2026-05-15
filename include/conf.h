@@ -16,11 +16,25 @@ struct conf {
 	uint32_t button_background;
 	uint32_t button_active;
 
-	/* other */
+	/* panel */
 	char *panel_items;
-	char *startmenu_layout;
+
+	/* taskbar */
 	int taskbar_padding;
 	int taskbar_spacing;
+
+	/* startmenu */
+	char *startmenu_layout;
+	int startmenu_padding;
+
+	/* clock */
+	int clock_padding;
+
+	/* battery */
+	int battery_padding;
+
+	/* keyboard */
+	int keyboard_padding;
 };
 
 #define BUTTON_MAX_WIDTH 200
