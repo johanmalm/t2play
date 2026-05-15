@@ -8,7 +8,7 @@ panel_breadth: 40
 
 # Taskbar
 taskbar_padding: 8
-taskbar_spacing: 2
+taskbar_spacing: 6
 
 task_padding: 8
 button_background: '#4A4A4AFF'

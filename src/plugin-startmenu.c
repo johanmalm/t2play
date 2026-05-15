@@ -386,7 +386,7 @@ startmenu_render_button(struct startmenu *menu)
 	struct widget *widget = &menu->base;
 	struct panel *panel = widget->panel;
 
-	const char *label = "^";
+	const char *label = "↑";
 	PangoRectangle rect = get_text_size(panel->conf->font_description, label);
 	widget->width = rect.width + 2 * panel->conf->startmenu_padding;
 
@@ -397,9 +397,9 @@ startmenu_render_button(struct startmenu *menu)
 		widget->width, panel->height);
 	cairo_t *cr = cairo_create(widget->surface);
 
-	cairo_set_source_u32(cr, panel->conf->button_background);
-	cairo_rectangle(cr, 0, 0, widget->width, panel->height);
-	cairo_fill(cr);
+//	cairo_set_source_u32(cr, panel->conf->button_background);
+//	cairo_rectangle(cr, 0, 0, widget->width, panel->height);
+//	cairo_fill(cr);
 
 	cairo_set_source_u32(cr, panel->conf->text);
 	cairo_move_to(cr, panel->conf->startmenu_padding, (panel->height - rect.height) / 2.0);

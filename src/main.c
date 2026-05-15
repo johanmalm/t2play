@@ -919,8 +919,7 @@ panel_setup(struct panel *panel)
 		panel->pollfds[FD_CLOCK].fd =
 			timerfd_create(CLOCK_REALTIME, TFD_CLOEXEC);
 		panel->pollfds[FD_CLOCK].events = POLLIN;
-		/* Fire at the start of the next minute, then every 60 seconds
-		 */
+		/* Fire at the start of the next minute, then every 60 seconds */
 		struct timespec now;
 		clock_gettime(CLOCK_REALTIME, &now);
 		struct itimerspec clock_timer = {
@@ -963,8 +962,7 @@ panel_setup(struct panel *panel)
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGTERM);
 	sigprocmask(SIG_BLOCK, &mask, NULL);
-	panel->pollfds[FD_SIGNAL].fd =
-		signalfd(-1, &mask, SFD_CLOEXEC | SFD_NONBLOCK);
+	panel->pollfds[FD_SIGNAL].fd = signalfd(-1, &mask, SFD_CLOEXEC | SFD_NONBLOCK);
 	panel->pollfds[FD_SIGNAL].events = POLLIN;
 }
 

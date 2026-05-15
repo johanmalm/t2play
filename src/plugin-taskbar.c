@@ -46,12 +46,12 @@ toplevel_update_surface(struct toplevel *toplevel)
 	toplevel->base.width = box.width;
 
 	/* Draw background */
+	rounded_rect(cairo, box.width, box.height, 6);
 	if (toplevel->active) {
 		cairo_set_source_u32(cairo, panel->conf->button_active);
 	} else {
 		cairo_set_source_u32(cairo, panel->conf->button_background);
 	}
-	cairo_rectangle(cairo, 0, 0, box.width, box.height);
 	cairo_fill(cairo);
 
 	/* Draw text */

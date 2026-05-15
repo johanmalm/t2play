@@ -2,6 +2,7 @@
 #include <wlr/util/log.h>
 #include "panel.h"
 #include "common/string-helpers.h"
+#include "pango/pango-layout.h"
 
 PangoRectangle
 get_text_size(const PangoFontDescription *desc, const char *string)
@@ -67,13 +68,14 @@ get_pango_layout(cairo_t *cairo, const PangoFontDescription *desc,
 	pango_layout_set_font_description(layout, desc);
 	pango_layout_set_single_paragraph_mode(layout, 1);
 	pango_layout_set_attributes(layout, attrs);
+	pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_END);
 	pango_attr_list_unref(attrs);
 	return layout;
 }
 
 void
 render_text(cairo_t *cairo, const PangoFontDescription *desc, double scale,
-	bool markup, const char *fmt, ...)
+		bool markup, const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -86,8 +88,7 @@ render_text(cairo_t *cairo, const PangoFontDescription *desc, double scale,
 	PangoLayout *layout = get_pango_layout(cairo, desc, buf, scale, markup);
 	cairo_font_options_t *fo = cairo_font_options_create();
 	cairo_get_font_options(cairo, fo);
-	pango_cairo_context_set_font_options(pango_layout_get_context(layout),
-		fo);
+	pango_cairo_context_set_font_options(pango_layout_get_context(layout), fo);
 	cairo_font_options_destroy(fo);
 	pango_cairo_update_layout(cairo, layout);
 	pango_cairo_show_layout(cairo, layout);
@@ -104,3 +105,38 @@ cairo_set_source_u32(cairo_t *cairo, uint32_t color)
 		(color >> (1 * 8) & 0xFF) / 255.0,
 		(color >> (0 * 8) & 0xFF) / 255.0);
 }
+
+/* 1 degree in radians (=2π/360) */
+static const double deg = 0.017453292519943295;
+
+void
+rounded_rect(cairo_t *cairo, double w, double h, double r)
+{
+	/* set transparent background */
+	cairo_set_operator(cairo, CAIRO_OPERATOR_CLEAR);
+	cairo_paint(cairo);
+
+	/* Create outline path and fill */
+	cairo_set_line_width(cairo, 0.0);
+	cairo_new_sub_path(cairo);
+
+	// TL
+	cairo_arc(cairo, r, r, r, 180 * deg, 270 * deg);
+	cairo_line_to(cairo, w - r, 0);
+
+	// TR
+	cairo_arc(cairo, w - r, r, r, -90 * deg, 0);
+	cairo_line_to(cairo, w, h - r);
+
+	// BR
+	cairo_arc(cairo, w - r, h - r, r, 0, 90 * deg);
+	cairo_line_to(cairo, r, h);
+
+	// BL
+	cairo_arc(cairo, r, h - r, r, 90 * deg, 180 * deg);
+	cairo_line_to(cairo, 0, r);
+
+	cairo_close_path(cairo);
+	cairo_set_operator(cairo, CAIRO_OPERATOR_SOURCE);
+}
+
