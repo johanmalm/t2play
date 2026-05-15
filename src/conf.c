@@ -20,10 +20,12 @@ struct yaml_conf {
 
 	/* panel */
 	char *panel_items;
+	int panel_breadth;
 
 	/* taskbar */
 	int taskbar_padding;
 	int taskbar_spacing;
+	int task_padding;
 
 	/* startmenu */
 	char *startmenu_layout;
@@ -46,9 +48,11 @@ static const cyaml_schema_field_t yaml_conf_fields[] = {
 	CYAML_FIELD_STRING_PTR("button_active", CYAML_FLAG_OPTIONAL, struct yaml_conf, button_active, 0, CYAML_UNLIMITED),
 
 	CYAML_FIELD_STRING_PTR("panel_items", CYAML_FLAG_OPTIONAL, struct yaml_conf, panel_items, 0, CYAML_UNLIMITED),
+	CYAML_FIELD_INT("panel_breadth", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, panel_breadth),
 
 	CYAML_FIELD_INT("taskbar_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, taskbar_padding),
 	CYAML_FIELD_INT("taskbar_spacing", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, taskbar_spacing),
+	CYAML_FIELD_INT("task_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, task_padding),
 
 	CYAML_FIELD_STRING_PTR("startmenu_layout", CYAML_FLAG_OPTIONAL, struct yaml_conf, startmenu_layout, 0, CYAML_UNLIMITED),
 	CYAML_FIELD_INT("startmenu_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, startmenu_padding),
@@ -86,9 +90,11 @@ parse(struct conf *conf, struct yaml_conf *data)
 	PARSE_COL(button_active);
 
 	PARSE_STR(panel_items);
+	PARSE_INT(panel_breadth);
 
 	PARSE_INT(taskbar_padding);
 	PARSE_INT(taskbar_spacing);
+	PARSE_INT(task_padding);
 
 	PARSE_STR(startmenu_layout);
 	PARSE_INT(startmenu_padding);
@@ -198,9 +204,11 @@ conf_init(struct conf *conf)
 	conf->button_active = 0x5A8AC6FF;
 
 	conf->panel_items = xstrdup("STBKC");
+	conf->panel_breadth = 40;
 
 	conf->taskbar_padding = 8;
 	conf->taskbar_spacing = 0;
+	conf->task_padding = 8;
 
 	conf->startmenu_layout = xstrdup("<vbox><search/><applist/></vbox>");
 	conf->startmenu_padding = 8;

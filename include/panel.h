@@ -46,6 +46,7 @@ struct widget_impl {
 /* Base class */
 struct widget {
 	int x;
+	int y;
 	int width;
 	enum widget_type type;
 	cairo_surface_t *surface;

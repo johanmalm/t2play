@@ -18,10 +18,13 @@ struct conf {
 
 	/* panel */
 	char *panel_items;
+	int panel_breadth;
 
 	/* taskbar */
 	int taskbar_padding;
 	int taskbar_spacing;
+
+	int task_padding;
 
 	/* startmenu */
 	char *startmenu_layout;
@@ -38,7 +41,6 @@ struct conf {
 };
 
 #define BUTTON_MAX_WIDTH 200
-#define PANEL_HEIGHT 30
 
 void conf_load(struct conf *conf, const char *config_file);
 void conf_init(struct conf *conf);

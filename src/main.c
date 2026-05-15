@@ -59,8 +59,7 @@ update_widget_positions(struct panel *panel)
 {
 	struct widget *widget, *taskbar = NULL;
 
-	/* Start by working out the width of the taskbar (the expandable widget)
-	 */
+	/* Start by working out the width of the taskbar (the expandable widget) */
 	wl_list_for_each(widget, &panel->widgets, link) {
 		if (widget->type == WIDGET_TASKBAR) {
 			taskbar = widget;
@@ -74,8 +73,7 @@ update_widget_positions(struct panel *panel)
 			if (!widget_is_plugin(widget)) {
 				continue;
 			}
-			/* For the time being, only the taskbar can be
-			 * expandable */
+			/* For the time being, only the taskbar can be expandable */
 			if (widget == taskbar) {
 				continue;
 			}
@@ -131,7 +129,7 @@ render_panel(cairo_t *cairo, struct panel *panel)
 			continue;
 		}
 		cairo_save(cairo);
-		cairo_set_source_surface(cairo, widget->surface, widget->x, 0);
+		cairo_set_source_surface(cairo, widget->surface, widget->x, widget->y);
 		cairo_paint(cairo);
 		cairo_restore(cairo);
 	}
@@ -975,8 +973,8 @@ panel_run(struct panel *panel)
 {
 	panel->run_display = true;
 
-	zwlr_layer_surface_v1_set_size(panel->layer_surface, 0, PANEL_HEIGHT);
-	zwlr_layer_surface_v1_set_exclusive_zone(panel->layer_surface, PANEL_HEIGHT);
+	zwlr_layer_surface_v1_set_size(panel->layer_surface, 0, panel->conf->panel_breadth);
+	zwlr_layer_surface_v1_set_exclusive_zone(panel->layer_surface, panel->conf->panel_breadth);
 	wl_surface_commit(panel->surface);
 	wl_display_roundtrip(panel->display);
 
