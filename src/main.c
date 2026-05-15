@@ -68,7 +68,7 @@ update_widget_positions(struct panel *panel)
 	}
 
 	if (taskbar) {
-		int width_left_for_expandable_widget = panel->width;
+		int width_left_for_expandable_widget = panel->box.width;
 		wl_list_for_each(widget, &panel->widgets, link) {
 			if (!widget_is_plugin(widget)) {
 				continue;
@@ -77,9 +77,9 @@ update_widget_positions(struct panel *panel)
 			if (widget == taskbar) {
 				continue;
 			}
-			width_left_for_expandable_widget -= widget->width;
+			width_left_for_expandable_widget -= widget->box.width;
 		}
-		taskbar->width = width_left_for_expandable_widget;
+		taskbar->box.width = width_left_for_expandable_widget;
 	}
 
 	/* Set plugin x-positions */
@@ -88,8 +88,10 @@ update_widget_positions(struct panel *panel)
 		if (!widget_is_plugin(widget)) {
 			continue;
 		}
-		widget->x = x;
-		x += widget->width;
+		widget->box.x = x;
+		widget->box.y = 0;
+		widget->box.height = panel->box.height;
+		x += widget->box.width;
 	}
 
 	/* Set taskbar toplevel x-positions */
@@ -98,13 +100,13 @@ update_widget_positions(struct panel *panel)
 		// TODO: Set toplevel widths more intelligently
 
 		int spacing = panel->conf->taskbar_spacing;
-		x = taskbar->x;
+		x = taskbar->box.x;
 		wl_list_for_each(widget, &panel->widgets, link) {
 			if (widget->type != WIDGET_TOPLEVEL) {
 				continue;
 			}
-			widget->x = x;
-			x += widget->width + spacing;
+			widget->box.x = x;
+			x += widget->box.width + spacing;
 		}
 	}
 }
@@ -129,7 +131,8 @@ render_panel(cairo_t *cairo, struct panel *panel)
 			continue;
 		}
 		cairo_save(cairo);
-		cairo_set_source_surface(cairo, widget->surface, widget->x, widget->y);
+		cairo_set_source_surface(cairo, widget->surface, widget->box.x,
+			widget->box.y);
 		cairo_paint(cairo);
 		cairo_restore(cairo);
 	}
@@ -137,7 +140,7 @@ render_panel(cairo_t *cairo, struct panel *panel)
 	/* Draw border */
 	cairo_save(cairo);
 	cairo_set_source_u32(cairo, panel->conf->text);
-	cairo_rectangle(cairo, 0, 0, panel->width, panel->height);
+	cairo_rectangle(cairo, 0, 0, panel->box.width, panel->box.height);
 	cairo_stroke(cairo);
 	cairo_restore(cairo);
 }
@@ -145,7 +148,7 @@ render_panel(cairo_t *cairo, struct panel *panel)
 void
 render_frame(struct panel *panel)
 {
-	if (!panel->run_display || !panel->width || !panel->height) {
+	if (!panel->run_display || wlr_box_empty(&panel->box)) {
 		return;
 	}
 
@@ -162,7 +165,8 @@ render_frame(struct panel *panel)
 	render_panel(cairo, panel);
 
 	panel->current_buffer = get_next_buffer(panel->shm, panel->buffers,
-		panel->width * panel->scale, panel->height * panel->scale);
+		panel->box.width * panel->scale,
+		panel->box.height * panel->scale);
 	if (!panel->current_buffer) {
 		goto cleanup;
 	}
@@ -177,7 +181,8 @@ render_frame(struct panel *panel)
 
 	wl_surface_set_buffer_scale(panel->surface, panel->scale);
 	wl_surface_attach(panel->surface, panel->current_buffer->buffer, 0, 0);
-	wl_surface_damage(panel->surface, 0, 0, panel->width, panel->height);
+	wl_surface_damage(panel->surface, 0, 0, panel->box.width,
+		panel->box.height);
 	wl_surface_commit(panel->surface);
 	wl_display_roundtrip(panel->display);
 
@@ -300,8 +305,7 @@ layer_surface_configure(void *data, struct zwlr_layer_surface_v1 *surface,
 	uint32_t serial, uint32_t width, uint32_t height)
 {
 	struct panel *panel = data;
-	panel->width = width;
-	panel->height = height;
+	panel->box = (struct wlr_box){ .width = (int)width, .height = (int)height };
 	zwlr_layer_surface_v1_ack_configure(surface, serial);
 	render_frame(panel);
 }
@@ -474,11 +478,10 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 		return;
 	}
 
-	int x = seat->pointer.x;
-
 	struct widget *widget;
 	wl_list_for_each_reverse(widget, &panel->widgets, link) {
-		if (x >= widget->x && x < widget->x + widget->width) {
+		if (wlr_box_contains_point(&widget->box, seat->pointer.x,
+				seat->pointer.y)) {
 			widget_on_left_button_press(widget, seat);
 			break;
 		}

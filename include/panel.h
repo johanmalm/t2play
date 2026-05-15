@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <wayland-client.h>
+#include <wlr/util/box.h>
 #include <xkbcommon/xkbcommon.h>
 #include "xdg-shell-client-protocol.h"
 
@@ -45,9 +46,7 @@ struct widget_impl {
 
 /* Base class */
 struct widget {
-	int x;
-	int y;
-	int width;
+	struct wlr_box box;
 	enum widget_type type;
 	cairo_surface_t *surface;
 	const struct widget_impl *impl;
@@ -88,14 +87,8 @@ struct startmenu {
 	 * The *_rect fields cache layout results for hit-testing and input.
 	 */
 	void *ui_root;
-	int ui_search_x;
-	int ui_search_y;
-	int ui_search_w;
-	int ui_search_h;
-	int ui_list_x;
-	int ui_list_y;
-	int ui_list_w;
-	int ui_list_h;
+	struct wlr_box ui_search;
+	struct wlr_box ui_list;
 
 	/* Application list loaded from .desktop files */
 	char **app_names;  /* display names */
@@ -183,8 +176,7 @@ struct panel {
 	struct wl_list widgets; /* struct widget.link */
 	struct startmenu *open_popup; /* currently open start menu popup */
 
-	uint32_t width;
-	uint32_t height;
+	struct wlr_box box;
 	int32_t scale;
 	struct pool_buffer buffers[2];
 	struct pool_buffer *current_buffer;

@@ -43,7 +43,8 @@ toplevel_update_surface(struct toplevel *toplevel)
 		box.width, box.height);
 	cairo_t *cairo = cairo_create(widget->surface);
 
-	toplevel->base.width = box.width;
+	toplevel->base.box.width = box.width;
+	toplevel->base.box.height = box.height;
 
 	/* Draw background */
 	rounded_rect(cairo, box.width, box.height, 6);
@@ -186,7 +187,7 @@ toplevel_create(struct panel *panel,
 	toplevel->base.panel = panel;
 	toplevel->base.type = WIDGET_TOPLEVEL;
 	toplevel->base.impl = &toplevel_widget_impl;
-	toplevel->base.y = panel->conf->taskbar_padding;
+	toplevel->base.box.y = panel->conf->taskbar_padding;
 	wl_list_init(&toplevel->base.link);
 	return toplevel;
 }

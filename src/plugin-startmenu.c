@@ -9,6 +9,7 @@
 #include <strings.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <wlr/util/box.h>
 #include <wlr/util/log.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
@@ -26,13 +27,6 @@
 #define MENU_MAX_VISIBLE 12
 
 /* ------------------------- Popup UI mini-framework ------------------------ */
-
-struct sm_rect {
-	int x;
-	int y;
-	int w;
-	int h;
-};
 
 enum sm_node_type {
 	SM_NODE_HBOX,
@@ -229,7 +223,7 @@ static void sm_measure(struct startmenu *menu, const struct sm_node *n,
 }
 
 static void sm_layout_and_cache(struct startmenu *menu, const struct sm_node *n,
-	struct sm_rect r)
+	struct wlr_box r)
 {
 	if (!n) {
 		return;
@@ -237,27 +231,21 @@ static void sm_layout_and_cache(struct startmenu *menu, const struct sm_node *n,
 
 	switch (n->type) {
 	case SM_NODE_SEARCH:
-		menu->ui_search_x = r.x;
-		menu->ui_search_y = r.y;
-		menu->ui_search_w = r.w;
-		menu->ui_search_h = r.h;
+		menu->ui_search = r;
 		return;
 	case SM_NODE_APPLIST:
-		menu->ui_list_x = r.x;
-		menu->ui_list_y = r.y;
-		menu->ui_list_w = r.w;
-		menu->ui_list_h = r.h;
+		menu->ui_list = r;
 		return;
 	case SM_NODE_VBOX: {
 		int y = r.y;
 		for (int i = 0; i < n->n_children; i++) {
 			int cw = 0, ch = 0;
 			sm_measure(menu, n->children[i], &cw, &ch);
-			struct sm_rect cr = {
+			struct wlr_box cr = {
 				.x = r.x,
 				.y = y,
-				.w = r.w,
-				.h = ch,
+				.width = r.width,
+				.height = ch,
 			};
 			sm_layout_and_cache(menu, n->children[i], cr);
 			y += ch;
@@ -267,19 +255,19 @@ static void sm_layout_and_cache(struct startmenu *menu, const struct sm_node *n,
 	case SM_NODE_HBOX: {
 		int x = r.x;
 		int n_children = n->n_children > 0 ? n->n_children : 1;
-		int base_w = r.w / n_children;
-		int rem = r.w - base_w * n_children;
+		int base_w = r.width / n_children;
+		int rem = r.width - base_w * n_children;
 		for (int i = 0; i < n->n_children; i++) {
 			int cw = 0, ch = 0;
 			sm_measure(menu, n->children[i], &cw, &ch);
 			(void)cw;
 			(void)ch;
 			int w = base_w + (i == n->n_children - 1 ? rem : 0);
-			struct sm_rect cr = {
+			struct wlr_box cr = {
 				.x = x,
 				.y = r.y,
-				.w = w,
-				.h = r.h,
+				.width = w,
+				.height = r.height,
 			};
 			sm_layout_and_cache(menu, n->children[i], cr);
 			x += w;
@@ -388,21 +376,22 @@ startmenu_render_button(struct startmenu *menu)
 
 	const char *label = "↑";
 	PangoRectangle rect = get_text_size(panel->conf->font_description, label);
-	widget->width = rect.width + 2 * panel->conf->startmenu_padding;
+	widget->box.width = rect.width + 2 * panel->conf->startmenu_padding;
 
 	if (widget->surface) {
 		cairo_surface_destroy(widget->surface);
 	}
 	widget->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-		widget->width, panel->height);
+		widget->box.width, panel->box.height);
 	cairo_t *cr = cairo_create(widget->surface);
 
 //	cairo_set_source_u32(cr, panel->conf->button_background);
-//	cairo_rectangle(cr, 0, 0, widget->width, panel->height);
+//	cairo_rectangle(cr, 0, 0, widget->box.width, panel->box.height);
 //	cairo_fill(cr);
 
 	cairo_set_source_u32(cr, panel->conf->text);
-	cairo_move_to(cr, panel->conf->startmenu_padding, (panel->height - rect.height) / 2.0);
+	cairo_move_to(cr, panel->conf->startmenu_padding,
+		(panel->box.height - rect.height) / 2.0);
 	render_text(cr, panel->conf->font_description, 1, false, "%s", label);
 	cairo_destroy(cr);
 }
@@ -415,14 +404,8 @@ startmenu_render_popup(struct startmenu *menu)
 	int height = (1 + menu->n_visible) * MENU_ITEM_HEIGHT;
 
 	/* Layout pass */
-	menu->ui_search_x = 0;
-	menu->ui_search_y = 0;
-	menu->ui_search_w = 0;
-	menu->ui_search_h = 0;
-	menu->ui_list_x = 0;
-	menu->ui_list_y = 0;
-	menu->ui_list_w = 0;
-	menu->ui_list_h = 0;
+	menu->ui_search = (struct wlr_box){0};
+	menu->ui_list = (struct wlr_box){0};
 	if (menu->ui_root) {
 		int mw = 0, mh = 0;
 		sm_measure(menu, (const struct sm_node *)menu->ui_root, &mw, &mh);
@@ -430,17 +413,18 @@ startmenu_render_popup(struct startmenu *menu)
 			height = mh;
 		}
 		sm_layout_and_cache(menu, (const struct sm_node *)menu->ui_root,
-			(struct sm_rect){ .x = 0, .y = 0, .w = width, .h = height });
+			(struct wlr_box){ .width = width, .height = height });
 	} else {
 		/* Fallback to the classic layout. */
-		menu->ui_search_x = 0;
-		menu->ui_search_y = 0;
-		menu->ui_search_w = width;
-		menu->ui_search_h = MENU_ITEM_HEIGHT;
-		menu->ui_list_x = 0;
-		menu->ui_list_y = MENU_ITEM_HEIGHT;
-		menu->ui_list_w = width;
-		menu->ui_list_h = menu->n_visible * MENU_ITEM_HEIGHT;
+		menu->ui_search = (struct wlr_box){
+			.width = width,
+			.height = MENU_ITEM_HEIGHT,
+		};
+		menu->ui_list = (struct wlr_box){
+			.y = MENU_ITEM_HEIGHT,
+			.width = width,
+			.height = menu->n_visible * MENU_ITEM_HEIGHT,
+		};
 	}
 
 	struct pool_buffer *buffer = get_next_buffer(panel->shm,
@@ -456,27 +440,25 @@ startmenu_render_popup(struct startmenu *menu)
 	cairo_restore(cr);
 
 	/* --- Search widget --- */
-	if (menu->ui_search_h > 0) {
-		struct sm_rect r = {
-			.x = menu->ui_search_x,
-			.y = menu->ui_search_y,
-			.w = menu->ui_search_w ? menu->ui_search_w : width,
-			.h = menu->ui_search_h,
-		};
+	if (menu->ui_search.height > 0) {
+		struct wlr_box r = menu->ui_search;
+		if (!r.width) {
+			r.width = width;
+		}
 		cairo_set_source_u32(cr, panel->conf->button_background);
-		cairo_rectangle(cr, r.x, r.y, r.w, r.h);
+		cairo_rectangle(cr, r.x, r.y, r.width, r.height);
 		cairo_fill(cr);
 
 		cairo_set_source_u32(cr, panel->conf->text);
 		cairo_set_line_width(cr, 1.0);
-		cairo_rectangle(cr, r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+		cairo_rectangle(cr, r.x + 1, r.y + 1, r.width - 2, r.height - 2);
 		cairo_stroke(cr);
 
 		PangoRectangle search_rect = get_text_size(panel->conf->font_description,
 			*menu->search ? menu->search : " ");
 		cairo_set_source_u32(cr, panel->conf->text);
 		cairo_move_to(cr, r.x + panel->conf->startmenu_padding,
-			r.y + (r.h - search_rect.height) / 2.0);
+			r.y + (r.height - search_rect.height) / 2.0);
 		if (*menu->search) {
 			render_text(cr, panel->conf->font_description, 1, false, "%s",
 				menu->search);
@@ -487,14 +469,12 @@ startmenu_render_popup(struct startmenu *menu)
 	}
 
 	/* --- App list widget --- */
-	if (menu->ui_list_h > 0) {
-		struct sm_rect r = {
-			.x = menu->ui_list_x,
-			.y = menu->ui_list_y,
-			.w = menu->ui_list_w ? menu->ui_list_w : width,
-			.h = menu->ui_list_h,
-		};
-		int visible_rows = r.h / MENU_ITEM_HEIGHT;
+	if (menu->ui_list.height > 0) {
+		struct wlr_box r = menu->ui_list;
+		if (!r.width) {
+			r.width = width;
+		}
+		int visible_rows = r.height / MENU_ITEM_HEIGHT;
 		if (visible_rows < 1) {
 			visible_rows = 1;
 		}
@@ -512,7 +492,7 @@ startmenu_render_popup(struct startmenu *menu)
 		if (menu->n_filtered == 0) {
 			int y = r.y;
 			cairo_set_source_u32(cr, panel->conf->button_background);
-			cairo_rectangle(cr, r.x, y, r.w, MENU_ITEM_HEIGHT);
+			cairo_rectangle(cr, r.x, y, r.width, MENU_ITEM_HEIGHT);
 			cairo_fill(cr);
 			PangoRectangle text_rect = get_text_size(
 				panel->conf->font_description, "No results");
@@ -524,7 +504,7 @@ startmenu_render_popup(struct startmenu *menu)
 			for (int row = 1; row < visible_rows; row++) {
 				y = r.y + row * MENU_ITEM_HEIGHT;
 				cairo_set_source_u32(cr, panel->conf->button_background);
-				cairo_rectangle(cr, r.x, y, r.w, MENU_ITEM_HEIGHT);
+				cairo_rectangle(cr, r.x, y, r.width, MENU_ITEM_HEIGHT);
 				cairo_fill(cr);
 			}
 		} else {
@@ -534,7 +514,7 @@ startmenu_render_popup(struct startmenu *menu)
 
 				if (idx >= menu->n_filtered) {
 					cairo_set_source_u32(cr, panel->conf->button_background);
-					cairo_rectangle(cr, r.x, y, r.w, MENU_ITEM_HEIGHT);
+					cairo_rectangle(cr, r.x, y, r.width, MENU_ITEM_HEIGHT);
 					cairo_fill(cr);
 					continue;
 				}
@@ -544,7 +524,7 @@ startmenu_render_popup(struct startmenu *menu)
 				} else {
 					cairo_set_source_u32(cr, panel->conf->button_background);
 				}
-				cairo_rectangle(cr, r.x, y, r.w, MENU_ITEM_HEIGHT);
+				cairo_rectangle(cr, r.x, y, r.width, MENU_ITEM_HEIGHT);
 				cairo_fill(cr);
 
 				int app_idx = menu->filtered[idx];
@@ -564,7 +544,8 @@ startmenu_render_popup(struct startmenu *menu)
 			PangoRectangle arr_rect =
 				get_text_size(panel->conf->font_description, "▲");
 			cairo_set_source_u32(cr, panel->conf->text);
-			cairo_move_to(cr, r.x + r.w - arr_rect.width - panel->conf->startmenu_padding,
+			cairo_move_to(cr, r.x + r.width - arr_rect.width
+					- panel->conf->startmenu_padding,
 				y + (MENU_ITEM_HEIGHT - arr_rect.height) / 2.0);
 			render_text(cr, panel->conf->font_description, 1, false, "▲");
 		}
@@ -573,7 +554,8 @@ startmenu_render_popup(struct startmenu *menu)
 			PangoRectangle arr_rect =
 				get_text_size(panel->conf->font_description, "▼");
 			cairo_set_source_u32(cr, panel->conf->text);
-			cairo_move_to(cr, r.x + r.w - arr_rect.width - panel->conf->startmenu_padding,
+			cairo_move_to(cr, r.x + r.width - arr_rect.width
+					- panel->conf->startmenu_padding,
 				y + (MENU_ITEM_HEIGHT - arr_rect.height) / 2.0);
 			render_text(cr, panel->conf->font_description, 1, false, "▼");
 		}
@@ -860,8 +842,8 @@ startmenu_on_left_button_press(struct widget *widget, struct seat *seat)
 	struct xdg_positioner *positioner =
 		xdg_wm_base_create_positioner(panel->xdg_wm_base);
 	xdg_positioner_set_size(positioner, MENU_WIDTH, popup_height);
-	xdg_positioner_set_anchor_rect(positioner, widget->x, 0, widget->width,
-		panel->height);
+	xdg_positioner_set_anchor_rect(positioner, widget->box.x, 0,
+		widget->box.width, panel->box.height);
 	xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_BOTTOM_LEFT);
 	xdg_positioner_set_gravity(positioner,
 		XDG_POSITIONER_GRAVITY_BOTTOM_RIGHT);
@@ -1003,26 +985,26 @@ void
 plugin_startmenu_pointer_motion(struct startmenu *menu, int y)
 {
 	/* Search widget - no hover for it */
-	if (y >= menu->ui_search_y && y < menu->ui_search_y + menu->ui_search_h) {
+	if (wlr_box_contains_point(&menu->ui_search, menu->ui_search.x, y)) {
 		if (menu->hover != -1) {
 			menu->hover = -1;
 			startmenu_render_popup(menu);
 		}
 		return;
 	}
-	if (menu->ui_list_h <= 0 || y < menu->ui_list_y
-			|| y >= menu->ui_list_y + menu->ui_list_h) {
+	if (wlr_box_empty(&menu->ui_list)
+			|| !wlr_box_contains_point(&menu->ui_list, menu->ui_list.x, y)) {
 		if (menu->hover != -1) {
 			menu->hover = -1;
 			startmenu_render_popup(menu);
 		}
 		return;
 	}
-	int visible_rows = menu->ui_list_h / MENU_ITEM_HEIGHT;
+	int visible_rows = menu->ui_list.height / MENU_ITEM_HEIGHT;
 	if (visible_rows < 1) {
 		visible_rows = 1;
 	}
-	int row = (y - menu->ui_list_y) / MENU_ITEM_HEIGHT;
+	int row = (y - menu->ui_list.y) / MENU_ITEM_HEIGHT;
 	if (row < 0 || row >= visible_rows
 			|| (menu->scroll_offset + row) >= menu->n_filtered) {
 		row = -1;
@@ -1046,18 +1028,18 @@ void
 plugin_startmenu_popup_click(struct startmenu *menu, int y)
 {
 	/* Ignore clicks on the search widget */
-	if (y >= menu->ui_search_y && y < menu->ui_search_y + menu->ui_search_h) {
+	if (wlr_box_contains_point(&menu->ui_search, menu->ui_search.x, y)) {
 		return;
 	}
-	if (menu->ui_list_h <= 0 || y < menu->ui_list_y
-			|| y >= menu->ui_list_y + menu->ui_list_h) {
+	if (wlr_box_empty(&menu->ui_list)
+			|| !wlr_box_contains_point(&menu->ui_list, menu->ui_list.x, y)) {
 		return;
 	}
-	int visible_rows = menu->ui_list_h / MENU_ITEM_HEIGHT;
+	int visible_rows = menu->ui_list.height / MENU_ITEM_HEIGHT;
 	if (visible_rows < 1) {
 		visible_rows = 1;
 	}
-	int row = (y - menu->ui_list_y) / MENU_ITEM_HEIGHT;
+	int row = (y - menu->ui_list.y) / MENU_ITEM_HEIGHT;
 	if (row < 0 || row >= visible_rows) {
 		return;
 	}
@@ -1136,14 +1118,15 @@ plugin_startmenu_create(struct panel *panel)
 	menu->hover = -1;
 	menu->selected = -1;
 	menu->ui_root = NULL;
-	menu->ui_search_x = 0;
-	menu->ui_search_y = 0;
-	menu->ui_search_w = MENU_WIDTH;
-	menu->ui_search_h = MENU_ITEM_HEIGHT;
-	menu->ui_list_x = 0;
-	menu->ui_list_y = MENU_ITEM_HEIGHT;
-	menu->ui_list_w = MENU_WIDTH;
-	menu->ui_list_h = MENU_MAX_VISIBLE * MENU_ITEM_HEIGHT;
+	menu->ui_search = (struct wlr_box){
+		.width = MENU_WIDTH,
+		.height = MENU_ITEM_HEIGHT,
+	};
+	menu->ui_list = (struct wlr_box){
+		.y = MENU_ITEM_HEIGHT,
+		.width = MENU_WIDTH,
+		.height = MENU_MAX_VISIBLE * MENU_ITEM_HEIGHT,
+	};
 	wl_list_insert(panel->widgets.prev, &menu->base.link);
 
 	/* Default layout: search box above scrollable app list. */
