@@ -15,7 +15,11 @@ button_background: '#4A4A4AFF'
 button_active: '#5A8AC6FF'
 
 # Startmenu
-startmenu_layout: '<vbox><search/><applist/></vbox>'
+startmenu_layout: |
+    <vbox>
+      <search />
+      <applist />
+    </vbox>
 startmenu_padding: 8
 
 # Clock
