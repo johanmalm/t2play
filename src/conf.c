@@ -207,7 +207,7 @@ conf_init(struct conf *conf)
 	conf->panel_breadth = 40;
 
 	conf->taskbar_padding = 8;
-	conf->taskbar_spacing = 0;
+	conf->taskbar_spacing = 6;
 	conf->task_padding = 8;
 
 	conf->startmenu_layout = xstrdup("<vbox><search/><applist/></vbox>");
