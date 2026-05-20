@@ -467,6 +467,7 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer, uint32_t time,
 			!= panel->surface) {
 		plugin_startmenu_pointer_motion(panel->open_popup,
 			seat->pointer.y);
+		/* Skip thumbnail hover detection while a popup is open */
 		return;
 	}
 
