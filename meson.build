@@ -50,6 +50,9 @@ protocols = [
   wl_protocol_dir / 'staging/cursor-shape/cursor-shape-v1.xml',
   'p/wlr-layer-shell-unstable-v1.xml',
   'p/wlr-foreign-toplevel-management-unstable-v1.xml',
+  'p/ext-foreign-toplevel-list-v1.xml',
+  'p/ext-image-capture-source-v1.xml',
+  'p/ext-image-copy-capture-v1.xml',
 ]
 
 foreach xml : protocols

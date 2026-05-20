@@ -24,6 +24,9 @@
 #include <wayland-cursor.h>
 #include <wlr/util/log.h>
 #include "cursor-shape-v1-client-protocol.h"
+#include "ext-foreign-toplevel-list-v1-client-protocol.h"
+#include "ext-image-capture-source-v1-client-protocol.h"
+#include "ext-image-copy-capture-v1-client-protocol.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
@@ -260,6 +263,8 @@ panel_destroy(struct panel *panel)
 
 	widgets_free(panel);
 
+	thumbnail_destroy_all(panel);
+
 	if (panel->toplevel_manager) {
 		zwlr_foreign_toplevel_manager_v1_destroy(
 			panel->toplevel_manager);
@@ -436,9 +441,15 @@ wl_pointer_leave(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 	struct wl_surface *surface)
 {
 	struct seat *seat = data;
-	if (seat->panel->open_popup
-		&& surface == seat->panel->open_popup->popup_surface) {
-		plugin_startmenu_pointer_leave(seat->panel->open_popup);
+	struct panel *panel = seat->panel;
+	if (panel->open_popup
+		&& surface == panel->open_popup->popup_surface) {
+		plugin_startmenu_pointer_leave(panel->open_popup);
+	}
+	/* Hide thumbnail when pointer leaves the panel surface */
+	if (surface == panel->surface && panel->hovered_toplevel) {
+		panel->hovered_toplevel = NULL;
+		thumbnail_hide(panel);
 	}
 	seat->pointer.focus_surface = NULL;
 }
@@ -450,11 +461,35 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer, uint32_t time,
 	struct seat *seat = data;
 	seat->pointer.x = wl_fixed_to_int(surface_x);
 	seat->pointer.y = wl_fixed_to_int(surface_y);
-	if (seat->panel->open_popup
+	struct panel *panel = seat->panel;
+	if (panel->open_popup
 		&& seat->pointer.focus_surface
-			!= seat->panel->surface) {
-		plugin_startmenu_pointer_motion(seat->panel->open_popup,
+			!= panel->surface) {
+		plugin_startmenu_pointer_motion(panel->open_popup,
 			seat->pointer.y);
+		return;
+	}
+
+	/* Detect hover over taskbar toplevel buttons */
+	if (seat->pointer.focus_surface == panel->surface) {
+		struct toplevel *hovered = NULL;
+		struct widget *widget;
+		wl_list_for_each_reverse(widget, &panel->widgets, link) {
+			if (widget->type == WIDGET_TOPLEVEL
+					&& wlr_box_contains_point(&widget->box,
+						seat->pointer.x, seat->pointer.y)) {
+				hovered = toplevel_from_widget(widget);
+				break;
+			}
+		}
+		if (hovered != panel->hovered_toplevel) {
+			panel->hovered_toplevel = hovered;
+			if (hovered) {
+				thumbnail_show(panel, hovered);
+			} else {
+				thumbnail_hide(panel);
+			}
+		}
 	}
 }
 
@@ -823,6 +858,22 @@ handle_global(void *data, struct wl_registry *registry, uint32_t name,
 			&xdg_wm_base_interface, 2);
 		xdg_wm_base_add_listener(panel->xdg_wm_base,
 			&xdg_wm_base_listener, NULL);
+	} else if (strcmp(interface, ext_foreign_toplevel_list_v1_interface.name)
+			== 0) {
+		panel->ext_toplevel_list = wl_registry_bind(registry, name,
+			&ext_foreign_toplevel_list_v1_interface, 1);
+	} else if (strcmp(interface,
+			ext_foreign_toplevel_image_capture_source_manager_v1_interface.name)
+			== 0) {
+		panel->ext_image_capture_source_mgr = wl_registry_bind(registry,
+			name,
+			&ext_foreign_toplevel_image_capture_source_manager_v1_interface,
+			1);
+	} else if (strcmp(interface,
+			ext_image_copy_capture_manager_v1_interface.name)
+			== 0) {
+		panel->ext_image_copy_capture_mgr = wl_registry_bind(registry,
+			name, &ext_image_copy_capture_manager_v1_interface, 1);
 	}
 }
 
@@ -895,6 +946,9 @@ panel_setup(struct panel *panel)
 		panel_destroy(panel);
 		exit(EXIT_FAILURE);
 	}
+
+	/* Initialize thumbnail support (registers ext toplevel list listener) */
+	thumbnail_init(panel);
 
 	if (!panel->cursor_shape_manager) {
 		panel_setup_cursors(panel);
@@ -1096,6 +1150,7 @@ main(int argc, char **argv)
 	wl_list_init(&panel.outputs);
 	wl_list_init(&panel.seats);
 	wl_list_init(&panel.widgets);
+	wl_list_init(&panel.ext_toplevels);
 
 	init_plugins(&panel);
 
