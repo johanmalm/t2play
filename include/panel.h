@@ -14,6 +14,16 @@
 struct panel;
 struct seat;
 struct widget;
+struct thumbnail;
+
+/* Forward declarations for Wayland protocol types used in struct definitions */
+struct ext_foreign_toplevel_handle_v1;
+struct ext_foreign_toplevel_image_capture_source_manager_v1;
+struct ext_foreign_toplevel_list_v1;
+struct ext_image_capture_source_v1;
+struct ext_image_copy_capture_frame_v1;
+struct ext_image_copy_capture_manager_v1;
+struct ext_image_copy_capture_session_v1;
 
 struct pool_buffer {
 	struct wl_buffer *buffer;
@@ -114,6 +124,44 @@ struct toplevel {
 	bool active;
 };
 
+/*
+ * Tracks an ext_foreign_toplevel_handle_v1 object (from ext-foreign-toplevel-list-v1)
+ * alongside its title and app_id for matching against wlr toplevel handles.
+ */
+struct ext_toplevel {
+	struct ext_foreign_toplevel_handle_v1 *handle;
+	char *title;
+	char *app_id;
+	struct wl_list link; /* panel.ext_toplevels */
+};
+
+/* Thumbnail popup shown when hovering over a taskbar task */
+struct thumbnail {
+	struct panel *panel;
+
+	/* Popup surfaces */
+	struct wl_surface *popup_surface;
+	struct xdg_surface *xdg_surface;
+	struct xdg_popup *xdg_popup;
+	struct pool_buffer popup_buffers[2];
+
+	/* Capture session state */
+	struct ext_image_copy_capture_session_v1 *session;
+	struct ext_image_copy_capture_frame_v1 *frame;
+	struct pool_buffer capture_buffers[2];
+	bool got_constraints;
+	bool frame_done;
+	bool frame_failed;
+	uint32_t capture_width;
+	uint32_t capture_height;
+	bool has_shm_format;
+
+	/* Scaled thumbnail image rendered into popup */
+	cairo_surface_t *image;
+	int image_width;
+	int image_height;
+};
+
 struct pointer {
 	struct wl_pointer *pointer;
 	uint32_t serial;
@@ -176,6 +224,18 @@ struct panel {
 	struct wl_list widgets; /* struct widget.link */
 	struct startmenu *open_popup; /* currently open start menu popup */
 
+	/* ext-foreign-toplevel-list: parallel list used for thumbnail capture */
+	struct ext_foreign_toplevel_list_v1 *ext_toplevel_list;
+	struct wl_list ext_toplevels; /* struct ext_toplevel.link */
+
+	/* Capture protocol managers */
+	struct ext_foreign_toplevel_image_capture_source_manager_v1 *ext_image_capture_source_mgr;
+	struct ext_image_copy_capture_manager_v1 *ext_image_copy_capture_mgr;
+
+	/* Thumbnail popup (shown on task hover) */
+	struct thumbnail *thumbnail;
+	struct toplevel *hovered_toplevel;
+
 	struct wlr_box box;
 	int32_t scale;
 	struct pool_buffer buffers[2];
@@ -225,6 +285,11 @@ void plugin_startmenu_pointer_motion(struct startmenu *menu, int y);
 void plugin_startmenu_pointer_leave(struct startmenu *menu);
 void plugin_startmenu_popup_click(struct startmenu *menu, int y);
 void plugin_startmenu_scroll(struct startmenu *menu, double delta);
+
+void thumbnail_init(struct panel *panel);
+void thumbnail_show(struct panel *panel, struct toplevel *toplevel);
+void thumbnail_hide(struct panel *panel);
+void thumbnail_destroy_all(struct panel *panel);
 
 void widget_on_left_button_press(struct widget *widget, struct seat *seat);
 char *widget_type(enum widget_type type);

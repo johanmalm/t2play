@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="ext_image_copy_capture_v1">
+  <copyright>
+    Copyright © 2021-2023 Andri Yngvason
+    Copyright © 2024 Simon Ser
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice (including the next
+    paragraph) shall be included in all copies or substantial portions of the
+    Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+  </copyright>
+
+  <interface name="ext_image_copy_capture_manager_v1" version="1">
+    <enum name="error">
+      <entry name="invalid_option" value="1"/>
+    </enum>
+
+    <enum name="options" bitfield="true">
+      <entry name="paint_cursors" value="1"/>
+    </enum>
+
+    <request name="create_session">
+      <arg name="session" type="new_id" interface="ext_image_copy_capture_session_v1"/>
+      <arg name="source" type="object" interface="ext_image_capture_source_v1"/>
+      <arg name="options" type="uint" enum="options"/>
+    </request>
+
+    <request name="create_pointer_cursor_session">
+      <arg name="session" type="new_id" interface="ext_image_copy_capture_cursor_session_v1"/>
+      <arg name="source" type="object" interface="ext_image_capture_source_v1"/>
+      <arg name="pointer" type="object" interface="wl_pointer"/>
+    </request>
+
+    <request name="destroy" type="destructor"/>
+  </interface>
+
+  <interface name="ext_image_copy_capture_session_v1" version="1">
+    <enum name="error">
+      <entry name="duplicate_frame" value="1"/>
+    </enum>
+
+    <event name="buffer_size">
+      <arg name="width" type="uint"/>
+      <arg name="height" type="uint"/>
+    </event>
+
+    <event name="shm_format">
+      <arg name="format" type="uint" enum="wl_shm.format"/>
+    </event>
+
+    <event name="dmabuf_device">
+      <arg name="device" type="array"/>
+    </event>
+
+    <event name="dmabuf_format">
+      <arg name="format" type="uint"/>
+      <arg name="modifiers" type="array"/>
+    </event>
+
+    <event name="done"/>
+
+    <event name="stopped"/>
+
+    <request name="create_frame">
+      <arg name="frame" type="new_id" interface="ext_image_copy_capture_frame_v1"/>
+    </request>
+
+    <request name="destroy" type="destructor"/>
+  </interface>
+
+  <interface name="ext_image_copy_capture_frame_v1" version="1">
+    <enum name="error">
+      <entry name="no_buffer" value="1"/>
+      <entry name="invalid_buffer_damage" value="2"/>
+      <entry name="already_captured" value="3"/>
+    </enum>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="attach_buffer">
+      <arg name="buffer" type="object" interface="wl_buffer"/>
+    </request>
+
+    <request name="damage_buffer">
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </request>
+
+    <request name="capture"/>
+
+    <event name="transform">
+      <arg name="transform" type="uint" enum="wl_output.transform"/>
+    </event>
+
+    <event name="damage">
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </event>
+
+    <event name="presentation_time">
+      <arg name="tv_sec_hi" type="uint"/>
+      <arg name="tv_sec_lo" type="uint"/>
+      <arg name="tv_nsec" type="uint"/>
+    </event>
+
+    <event name="ready"/>
+
+    <enum name="failure_reason">
+      <entry name="unknown" value="0"/>
+      <entry name="buffer_constraints" value="1"/>
+      <entry name="stopped" value="2"/>
+    </enum>
+
+    <event name="failed">
+      <arg name="reason" type="uint" enum="failure_reason"/>
+    </event>
+  </interface>
+
+  <interface name="ext_image_copy_capture_cursor_session_v1" version="1">
+    <enum name="error">
+      <entry name="duplicate_session" value="1"/>
+    </enum>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="get_capture_session">
+      <arg name="session" type="new_id" interface="ext_image_copy_capture_session_v1"/>
+    </request>
+
+    <event name="enter"/>
+
+    <event name="leave"/>
+
+    <event name="position">
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+    </event>
+
+    <event name="hotspot">
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+    </event>
+  </interface>
+</protocol>
