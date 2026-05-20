@@ -287,6 +287,7 @@ void plugin_startmenu_popup_click(struct startmenu *menu, int y);
 void plugin_startmenu_scroll(struct startmenu *menu, double delta);
 
 void thumbnail_init(struct panel *panel);
+void thumbnail_bind_ext_toplevel_list(struct panel *panel);
 void thumbnail_show(struct panel *panel, struct toplevel *toplevel);
 void thumbnail_hide(struct panel *panel);
 void thumbnail_destroy_all(struct panel *panel);
