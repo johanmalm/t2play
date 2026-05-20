@@ -408,10 +408,18 @@ do_capture(struct thumbnail *thumb,
 		(int32_t)thumb->capture_width, (int32_t)thumb->capture_height);
 	ext_image_copy_capture_frame_v1_capture(thumb->frame);
 
-	/* Wait for the frame to be ready (up to 5 roundtrips) */
-	for (int i = 0; i < 5 && !thumb->frame_done && !thumb->frame_failed; i++) {
+	/*
+	 * Wait for the frame to be ready. Most compositors deliver the frame
+	 * within one roundtrip, but allow up to MAX_CAPTURE_ROUNDTRIPS to
+	 * handle compositors that need a full repaint cycle before the frame
+	 * can be captured.
+	 */
+#define MAX_CAPTURE_ROUNDTRIPS 5
+	for (int i = 0; i < MAX_CAPTURE_ROUNDTRIPS
+			&& !thumb->frame_done && !thumb->frame_failed; i++) {
 		wl_display_roundtrip(panel->display);
 	}
+#undef MAX_CAPTURE_ROUNDTRIPS
 
 	ext_image_copy_capture_frame_v1_destroy(thumb->frame);
 	thumb->frame = NULL;
@@ -500,7 +508,12 @@ thumbnail_show(struct panel *panel, struct toplevel *toplevel)
 		xdg_wm_base_create_positioner(panel->xdg_wm_base);
 	xdg_positioner_set_size(positioner, thumb->image_width,
 		thumb->image_height);
-	/* Anchor rect covers the task button's column within the panel */
+	/*
+	 * Anchor rect covers the task button's column in panel coordinates.
+	 * BOTTOM_LEFT anchor + BOTTOM_RIGHT gravity opens the popup downward
+	 * from the bottom of the panel (or upward for a bottom panel via
+	 * FLIP_Y constraint adjustment), matching the startmenu behaviour.
+	 */
 	xdg_positioner_set_anchor_rect(positioner, toplevel->base.box.x, 0,
 		toplevel->base.box.width, panel->box.height);
 	xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_BOTTOM_LEFT);
