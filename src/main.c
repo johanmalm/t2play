@@ -446,12 +446,10 @@ wl_pointer_leave(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 		&& surface == panel->open_popup->popup_surface) {
 		plugin_startmenu_pointer_leave(panel->open_popup);
 	}
-	/* Hide thumbnail when pointer leaves the panel surface */
 	if (panel->thumbnail && surface == panel->thumbnail->popup_surface) {
 		panel->hovered_toplevel = NULL;
 		thumbnail_hide(panel);
-	}
-	if (surface == panel->surface && panel->hovered_toplevel
+	} else if (surface == panel->surface && panel->hovered_toplevel
 		&& !panel->thumbnail) {
 		panel->hovered_toplevel = NULL;
 		thumbnail_hide(panel);
