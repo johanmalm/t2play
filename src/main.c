@@ -447,7 +447,12 @@ wl_pointer_leave(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 		plugin_startmenu_pointer_leave(panel->open_popup);
 	}
 	/* Hide thumbnail when pointer leaves the panel surface */
-	if (surface == panel->surface && panel->hovered_toplevel) {
+	if (panel->thumbnail && surface == panel->thumbnail->popup_surface) {
+		panel->hovered_toplevel = NULL;
+		thumbnail_hide(panel);
+	}
+	if (surface == panel->surface && panel->hovered_toplevel
+		&& !panel->thumbnail) {
 		panel->hovered_toplevel = NULL;
 		thumbnail_hide(panel);
 	}
@@ -863,6 +868,7 @@ handle_global(void *data, struct wl_registry *registry, uint32_t name,
 			== 0) {
 		panel->ext_toplevel_list = wl_registry_bind(registry, name,
 			&ext_foreign_toplevel_list_v1_interface, 1);
+		thumbnail_bind_ext_toplevel_list(panel);
 	} else if (strcmp(interface,
 			ext_foreign_toplevel_image_capture_source_manager_v1_interface.name)
 			== 0) {

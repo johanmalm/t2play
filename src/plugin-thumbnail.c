@@ -100,7 +100,12 @@ static const struct ext_foreign_toplevel_list_v1_listener ext_list_listener = {
 void
 thumbnail_init(struct panel *panel)
 {
-	wl_list_init(&panel->ext_toplevels);
+	/* ext_toplevels list is initialized during panel setup */
+}
+
+void
+thumbnail_bind_ext_toplevel_list(struct panel *panel)
+{
 	if (panel->ext_toplevel_list) {
 		ext_foreign_toplevel_list_v1_add_listener(panel->ext_toplevel_list,
 			&ext_list_listener, panel);
