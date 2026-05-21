@@ -316,8 +316,8 @@ static void
 thumbnail_popup_done(void *data, struct xdg_popup *popup)
 {
 	struct thumbnail *thumb = data;
-	thumb->panel->hovered_toplevel = NULL;
 	thumbnail_hide(thumb->panel);
+	thumb->panel->hovered_toplevel = NULL;
 }
 
 static void
