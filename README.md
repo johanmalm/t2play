@@ -1,24 +1,11 @@
-t2play
+# Why
 
 Bringing the tint2 spirit to the modern desktop
 
-## Configuration
+# Build
 
-t2play reads `$XDG_CONFIG_HOME/t2play/config.yaml` (falling back to
-`~/.config/t2play/config.yaml`) on startup. Example:
+    meson setup build && ninja -C build
 
-```yaml
-panel_items: TC
-```
+# What
 
-### panel_items
-
-A string of single-character codes that controls which items appear on the
-panel and in what order:
-
-| Code | Item    | Position   |
-|------|---------|------------|
-| T    | Taskbar | left       |
-| C    | Clock   | right      |
-
-Default: `TC`
+Extremely WIP and alpha
