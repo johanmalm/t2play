@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - 'master'
+
+jobs:
+  build:
+    name: Build
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [
+          Debian,
+        ]
+        include:
+          - name: Debian
+            os: ubuntu-latest
+            container: debian:testing
+            env:
+              TARGET: 'sh -xe'
+
+    env: ${{ matrix.env }}
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+
+    steps:
+      - uses: actions/checkout@v1
+
+      - name: Install Debian Testing dependencies
+        if: matrix.name == 'Debian'
+        run: |
+          sed -i '/^Types/ s/deb/& deb-src/' /etc/apt/sources.list.d/debian.sources
+          apt-get update
+          apt-get upgrade -y
+          apt-get install -y git gcc clang gdb xwayland
+          apt-get build-dep -y labwc
+          apt-get build-dep -y libwlroots-0.19-dev
+          apt-get build-dep -y libxkbcommon-dev
+          apt-get install -y libyaml-dev libcyaml-dev
+
+      # These builds are executed on all runners
+      - name: Build with gcc
+        run: |
+          echo '
+            cd "$GITHUB_WORKSPACE"
+            export CC=gcc
+            meson setup build-gcc --werror
+            meson compile -C build-gcc
+          ' | $TARGET
+
