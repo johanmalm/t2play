@@ -6,7 +6,7 @@ sources = files(
   'plugin-kbdlayout.c',
   'plugin-startmenu.c',
   'plugin-taskbar.c',
-  'plugin-thumbnail.c',
+  'thumbnail.c',
   'pool.c',
   'widget.c',
 )
