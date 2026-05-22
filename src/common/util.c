@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
-#include <wlr/util/log.h>
 #include "panel.h"
+#include "common/log.h"
 #include "common/string-helpers.h"
 #include "pango/pango-layout.h"
 
@@ -52,9 +52,8 @@ get_pango_layout(cairo_t *cairo, const PangoFontDescription *desc,
 			pango_layout_set_text(layout, buf, -1);
 			free(buf);
 		} else {
-			wlr_log(WLR_ERROR,
-				"pango_parse_markup '%s' -> error %s", text,
-				error->message);
+			warn("pango_parse_markup '%s' -> error %s",
+				text, error->message);
 			g_error_free(error);
 			markup = false; /* fallback to plain text */
 		}

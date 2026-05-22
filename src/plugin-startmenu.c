@@ -9,11 +9,11 @@
 #include <strings.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <wlr/util/box.h>
-#include <wlr/util/log.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 #include "conf.h"
+#include "common/box.h"
+#include "common/log.h"
 #include "common/mem.h"
 #include "panel.h"
 #include "common/string-helpers.h"
@@ -223,7 +223,7 @@ static void sm_measure(struct startmenu *menu, const struct sm_node *n,
 }
 
 static void sm_layout_and_cache(struct startmenu *menu, const struct sm_node *n,
-	struct wlr_box r)
+	struct box r)
 {
 	if (!n) {
 		return;
@@ -241,7 +241,7 @@ static void sm_layout_and_cache(struct startmenu *menu, const struct sm_node *n,
 		for (int i = 0; i < n->n_children; i++) {
 			int cw = 0, ch = 0;
 			sm_measure(menu, n->children[i], &cw, &ch);
-			struct wlr_box cr = {
+			struct box cr = {
 				.x = r.x,
 				.y = y,
 				.width = r.width,
@@ -263,7 +263,7 @@ static void sm_layout_and_cache(struct startmenu *menu, const struct sm_node *n,
 			(void)cw;
 			(void)ch;
 			int w = base_w + (i == n->n_children - 1 ? rem : 0);
-			struct wlr_box cr = {
+			struct box cr = {
 				.x = x,
 				.y = r.y,
 				.width = w,
@@ -343,7 +343,7 @@ launch_app(const char *exec)
 	}
 	pid_t pid = fork();
 	if (pid < 0) {
-		wlr_log(WLR_ERROR, "startmenu: fork failed: %s", strerror(errno));
+		warn("startmenu: fork failed: %s", strerror(errno));
 		return;
 	}
 	if (pid == 0) {
@@ -404,8 +404,8 @@ startmenu_render_popup(struct startmenu *menu)
 	int height = (1 + menu->n_visible) * MENU_ITEM_HEIGHT;
 
 	/* Layout pass */
-	menu->ui_search = (struct wlr_box){0};
-	menu->ui_list = (struct wlr_box){0};
+	menu->ui_search = (struct box){0};
+	menu->ui_list = (struct box){0};
 	if (menu->ui_root) {
 		int mw = 0, mh = 0;
 		sm_measure(menu, (const struct sm_node *)menu->ui_root, &mw, &mh);
@@ -413,14 +413,14 @@ startmenu_render_popup(struct startmenu *menu)
 			height = mh;
 		}
 		sm_layout_and_cache(menu, (const struct sm_node *)menu->ui_root,
-			(struct wlr_box){ .width = width, .height = height });
+			(struct box){ .width = width, .height = height });
 	} else {
 		/* Fallback to the classic layout. */
-		menu->ui_search = (struct wlr_box){
+		menu->ui_search = (struct box){
 			.width = width,
 			.height = MENU_ITEM_HEIGHT,
 		};
-		menu->ui_list = (struct wlr_box){
+		menu->ui_list = (struct box){
 			.y = MENU_ITEM_HEIGHT,
 			.width = width,
 			.height = menu->n_visible * MENU_ITEM_HEIGHT,
@@ -441,7 +441,7 @@ startmenu_render_popup(struct startmenu *menu)
 
 	/* --- Search widget --- */
 	if (menu->ui_search.height > 0) {
-		struct wlr_box r = menu->ui_search;
+		struct box r = menu->ui_search;
 		if (!r.width) {
 			r.width = width;
 		}
@@ -470,7 +470,7 @@ startmenu_render_popup(struct startmenu *menu)
 
 	/* --- App list widget --- */
 	if (menu->ui_list.height > 0) {
-		struct wlr_box r = menu->ui_list;
+		struct box r = menu->ui_list;
 		if (!r.width) {
 			r.width = width;
 		}
@@ -660,7 +660,7 @@ load_apps(struct startmenu *menu)
 {
 	struct sfdo_basedir_ctx *basedir_ctx = sfdo_basedir_ctx_create();
 	if (!basedir_ctx) {
-		wlr_log(WLR_ERROR, "startmenu: failed to create basedir context");
+		warn("startmenu: failed to create basedir context");
 		return;
 	}
 
@@ -668,14 +668,14 @@ load_apps(struct startmenu *menu)
 		sfdo_desktop_ctx_create(basedir_ctx);
 	sfdo_basedir_ctx_destroy(basedir_ctx);
 	if (!desktop_ctx) {
-		wlr_log(WLR_ERROR, "startmenu: failed to create desktop context");
+		warn("startmenu: failed to create desktop context");
 		return;
 	}
 
 	struct sfdo_desktop_db *db = sfdo_desktop_db_load(desktop_ctx, NULL);
 	sfdo_desktop_ctx_destroy(desktop_ctx);
 	if (!db) {
-		wlr_log(WLR_ERROR, "startmenu: failed to load desktop db");
+		warn("startmenu: failed to load desktop db");
 		return;
 	}
 
@@ -781,7 +781,7 @@ load_apps(struct startmenu *menu)
 	free(entries_buf);
 	menu->n_apps = j;
 
-	wlr_log(WLR_DEBUG, "startmenu: loaded %d applications", menu->n_apps);
+	debug("startmenu: loaded %d applications", menu->n_apps);
 }
 
 static void
@@ -791,7 +791,7 @@ startmenu_on_left_button_press(struct widget *widget, struct seat *seat)
 	struct panel *panel = widget->panel;
 
 	if (!panel->xdg_wm_base) {
-		wlr_log(WLR_ERROR, "xdg_wm_base not available");
+		warn("xdg_wm_base not available");
 		return;
 	}
 
@@ -816,14 +816,14 @@ startmenu_on_left_button_press(struct widget *widget, struct seat *seat)
 	menu->popup_surface =
 		wl_compositor_create_surface(panel->compositor);
 	if (!menu->popup_surface) {
-		wlr_log(WLR_ERROR, "failed to create popup surface");
+		warn("failed to create popup surface");
 		return;
 	}
 
 	menu->xdg_surface = xdg_wm_base_get_xdg_surface(panel->xdg_wm_base,
 		menu->popup_surface);
 	if (!menu->xdg_surface) {
-		wlr_log(WLR_ERROR, "failed to create xdg_surface");
+		warn("failed to create xdg_surface");
 		wl_surface_destroy(menu->popup_surface);
 		menu->popup_surface = NULL;
 		return;
@@ -856,7 +856,7 @@ startmenu_on_left_button_press(struct widget *widget, struct seat *seat)
 	xdg_positioner_destroy(positioner);
 
 	if (!menu->xdg_popup) {
-		wlr_log(WLR_ERROR, "failed to create xdg_popup");
+		warn("failed to create xdg_popup");
 		xdg_surface_destroy(menu->xdg_surface);
 		menu->xdg_surface = NULL;
 		wl_surface_destroy(menu->popup_surface);
@@ -925,7 +925,7 @@ plugin_startmenu_key(struct panel *panel, uint32_t key)
 				? menu->scroll_offset + menu->hover : -1);
 		if (idx >= 0 && idx < menu->n_filtered) {
 			int app_idx = menu->filtered[idx];
-			wlr_log(WLR_DEBUG, "startmenu: launching %s (%s)",
+			debug("startmenu: launching %s (%s)",
 				menu->app_names[app_idx],
 				menu->app_execs[app_idx]);
 			launch_app(menu->app_execs[app_idx]);
@@ -985,15 +985,15 @@ void
 plugin_startmenu_pointer_motion(struct startmenu *menu, int y)
 {
 	/* Search widget - no hover for it */
-	if (wlr_box_contains_point(&menu->ui_search, menu->ui_search.x, y)) {
+	if (box_contains_point(&menu->ui_search, menu->ui_search.x, y)) {
 		if (menu->hover != -1) {
 			menu->hover = -1;
 			startmenu_render_popup(menu);
 		}
 		return;
 	}
-	if (wlr_box_empty(&menu->ui_list)
-			|| !wlr_box_contains_point(&menu->ui_list, menu->ui_list.x, y)) {
+	if (box_empty(&menu->ui_list)
+			|| !box_contains_point(&menu->ui_list, menu->ui_list.x, y)) {
 		if (menu->hover != -1) {
 			menu->hover = -1;
 			startmenu_render_popup(menu);
@@ -1028,11 +1028,11 @@ void
 plugin_startmenu_popup_click(struct startmenu *menu, int y)
 {
 	/* Ignore clicks on the search widget */
-	if (wlr_box_contains_point(&menu->ui_search, menu->ui_search.x, y)) {
+	if (box_contains_point(&menu->ui_search, menu->ui_search.x, y)) {
 		return;
 	}
-	if (wlr_box_empty(&menu->ui_list)
-			|| !wlr_box_contains_point(&menu->ui_list, menu->ui_list.x, y)) {
+	if (box_empty(&menu->ui_list)
+			|| !box_contains_point(&menu->ui_list, menu->ui_list.x, y)) {
 		return;
 	}
 	int visible_rows = menu->ui_list.height / MENU_ITEM_HEIGHT;
@@ -1046,7 +1046,7 @@ plugin_startmenu_popup_click(struct startmenu *menu, int y)
 	int idx = menu->scroll_offset + row;
 	if (idx < menu->n_filtered) {
 		int app_idx = menu->filtered[idx];
-		wlr_log(WLR_DEBUG, "startmenu: launching %s (%s)",
+		debug("startmenu: launching %s (%s)",
 			menu->app_names[app_idx], menu->app_execs[app_idx]);
 		launch_app(menu->app_execs[app_idx]);
 		startmenu_close(menu);
@@ -1118,11 +1118,11 @@ plugin_startmenu_create(struct panel *panel)
 	menu->hover = -1;
 	menu->selected = -1;
 	menu->ui_root = NULL;
-	menu->ui_search = (struct wlr_box){
+	menu->ui_search = (struct box){
 		.width = MENU_WIDTH,
 		.height = MENU_ITEM_HEIGHT,
 	};
-	menu->ui_list = (struct wlr_box){
+	menu->ui_list = (struct box){
 		.y = MENU_ITEM_HEIGHT,
 		.width = MENU_WIDTH,
 		.height = MENU_MAX_VISIBLE * MENU_ITEM_HEIGHT,
@@ -1135,7 +1135,7 @@ plugin_startmenu_create(struct panel *panel)
 		: "<vbox><search/><applist/></vbox>";
 	menu->ui_root = sm_parse_layout(layout_xml);
 	if (!menu->ui_root) {
-		wlr_log(WLR_ERROR, "startmenu: failed to parse startmenu_layout, falling back");
+		warn("startmenu: failed to parse startmenu_layout, falling back");
 		menu->ui_root = sm_parse_layout("<vbox><search/><applist/></vbox>");
 	}
 

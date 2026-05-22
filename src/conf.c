@@ -3,9 +3,9 @@
 #include <sfdo-basedir.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <wlr/util/log.h>
 #include <unistd.h>
 #include "common/array.h"
+#include "common/log.h"
 #include "common/mem.h"
 #include "common/string-helpers.h"
 #include "common/hex.h"
@@ -111,22 +111,22 @@ parse(struct conf *conf, struct yaml_conf *data)
 static void
 load(struct conf *conf, const char *path)
 {
-	wlr_log(WLR_INFO, "reading config file '%s'", path);
+	info("reading config file '%s'", path);
 
 	struct yaml_conf *data = NULL;
 	cyaml_err_t err = cyaml_load_file(path, &yaml_cyaml_config,
 		&yaml_conf_schema, (cyaml_data_t **)&data, NULL);
 	if (err == CYAML_ERR_FILE_OPEN) {
-		wlr_log(WLR_INFO, "no config file '%s'", path);
+		info("no config file '%s'", path);
 		return;
 	}
 	if (err != CYAML_OK) {
-		wlr_log(WLR_ERROR, "failed to load config '%s': %s", path,
+		warn("failed to load config '%s': %s", path,
 			cyaml_strerror(err));
 		return;
 	}
 	if (!data) {
-		wlr_log(WLR_ERROR, "no config file data");
+		warn("no config file data");
 		return;
 	}
 	parse(conf, data);
@@ -138,8 +138,7 @@ get_paths(struct wl_array *paths)
 {
 	struct sfdo_basedir_ctx *ctx = sfdo_basedir_ctx_create();
 	if (!ctx) {
-		wlr_log(WLR_ERROR, "sfdo_basedir_ctx_create() failed");
-		exit(EXIT_FAILURE);
+		die("sfdo_basedir_ctx_create() failed");
 	}
 	/* Build XDG_CONFIG_HOME path */
 	const char *dir;
@@ -176,7 +175,7 @@ conf_load(struct conf *conf, const char *config_file)
 		char **path;
 		wl_array_for_each(path, &paths) {
 			if (access(*path, R_OK) != 0) {
-				wlr_log(WLR_INFO, "no config file '%s'", *path);
+				info("no config file '%s'", *path);
 				continue;
 			}
 			load(conf, *path);

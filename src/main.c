@@ -22,7 +22,6 @@
 #include <unistd.h>
 #include <wayland-client.h>
 #include <wayland-cursor.h>
-#include <wlr/util/log.h>
 #include "cursor-shape-v1-client-protocol.h"
 #include "ext-foreign-toplevel-list-v1-client-protocol.h"
 #include "ext-image-capture-source-v1-client-protocol.h"
@@ -31,6 +30,8 @@
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 #include "conf.h"
+#include "common/box.h"
+#include "common/log.h"
 #include "common/mem.h"
 #include "panel.h"
 
@@ -52,7 +53,7 @@ init_plugins(struct panel *panel)
 		} else if (*p == 'B') {
 			plugin_battery_create(panel);
 		} else {
-			wlr_log(WLR_ERROR, "unknown panel_items code '%c'", *p);
+			warn("unknown panel_items code '%c'", *p);
 		}
 	}
 }
@@ -129,7 +130,7 @@ render_panel(cairo_t *cairo, struct panel *panel)
 	struct widget *widget;
 	wl_list_for_each(widget, &panel->widgets, link) {
 		if (!widget->surface) {
-			wlr_log(WLR_DEBUG, "no wiget surface for %s",
+			debug("no wiget surface for %s",
 				widget_type(widget->type));
 			continue;
 		}
@@ -151,7 +152,7 @@ render_panel(cairo_t *cairo, struct panel *panel)
 void
 render_frame(struct panel *panel)
 {
-	if (!panel->run_display || wlr_box_empty(&panel->box)) {
+	if (!panel->run_display || box_empty(&panel->box)) {
 		return;
 	}
 
@@ -310,7 +311,7 @@ layer_surface_configure(void *data, struct zwlr_layer_surface_v1 *surface,
 	uint32_t serial, uint32_t width, uint32_t height)
 {
 	struct panel *panel = data;
-	panel->box = (struct wlr_box){ .width = (int)width, .height = (int)height };
+	panel->box = (struct box){ .width = (int)width, .height = (int)height };
 	zwlr_layer_surface_v1_ack_configure(surface, serial);
 	render_frame(panel);
 }
@@ -336,8 +337,7 @@ surface_enter(void *data, struct wl_surface *surface, struct wl_output *output)
 		if (panel_output->wl_output != output) {
 			continue;
 		}
-		wlr_log(WLR_DEBUG, "surface enter on output %s",
-			panel_output->name);
+		debug("surface enter on output %s", panel_output->name);
 		panel->output = panel_output;
 		panel->scale = panel->output->scale;
 		render_frame(panel);
@@ -379,13 +379,13 @@ update_cursor(struct seat *seat)
 	pointer->cursor_theme = wl_cursor_theme_load(cursor_theme,
 		cursor_size * panel->scale, panel->shm);
 	if (!pointer->cursor_theme) {
-		wlr_log(WLR_ERROR, "failed to load cursor theme");
+		warn("failed to load cursor theme");
 		return;
 	}
 	struct wl_cursor *cursor =
 		wl_cursor_theme_get_cursor(pointer->cursor_theme, "default");
 	if (!cursor) {
-		wlr_log(WLR_ERROR, "failed to get default cursor from theme");
+		warn("failed to get default cursor from theme");
 		return;
 	}
 	pointer->cursor_image = cursor->images[0];
@@ -480,7 +480,7 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer, uint32_t time,
 		struct widget *widget;
 		wl_list_for_each_reverse(widget, &panel->widgets, link) {
 			if (widget->type == WIDGET_TOPLEVEL
-					&& wlr_box_contains_point(&widget->box,
+					&& box_contains_point(&widget->box,
 						seat->pointer.x, seat->pointer.y)) {
 				hovered = toplevel_from_widget(widget);
 				break;
@@ -519,7 +519,7 @@ wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 
 	struct widget *widget;
 	wl_list_for_each_reverse(widget, &panel->widgets, link) {
-		if (wlr_box_contains_point(&widget->box, seat->pointer.x,
+		if (box_contains_point(&widget->box, seat->pointer.x,
 				seat->pointer.y)) {
 			widget_on_left_button_press(widget, seat);
 			break;
@@ -781,7 +781,7 @@ output_name(void *data, struct wl_output *wl_output, const char *name)
 	struct conf *conf = panel->conf;
 
 	if (!panel->output && conf->output && !strcmp(conf->output, name)) {
-		wlr_log(WLR_DEBUG, "Using output %s", name);
+		debug("Using output %s", name);
 		panel->output = output;
 	}
 }
@@ -922,8 +922,7 @@ panel_setup(struct panel *panel)
 {
 	panel->display = wl_display_connect(NULL);
 	if (!panel->display) {
-		wlr_log(WLR_ERROR, "unable to connect to the compositor");
-		exit(EXIT_FAILURE);
+		die("unable to connect to the compositor");
 	}
 
 	panel->scale = 1;
@@ -931,23 +930,20 @@ panel_setup(struct panel *panel)
 	struct wl_registry *registry = wl_display_get_registry(panel->display);
 	wl_registry_add_listener(registry, &registry_listener, panel);
 	if (wl_display_roundtrip(panel->display) < 0) {
-		wlr_log(WLR_ERROR,
-			"failed to register with the wayland display");
-		exit(EXIT_FAILURE);
+		die("failed to register with the wayland display");
 	}
 
 	assert(panel->compositor && panel->layer_shell && panel->shm);
 
 	/* Second roundtrip to get wl_output properties */
 	if (wl_display_roundtrip(panel->display) < 0) {
-		wlr_log(WLR_ERROR, "error during outputs init");
+		warn("error during outputs init");
 		panel_destroy(panel);
 		exit(EXIT_FAILURE);
 	}
 
 	if (!panel->output && panel->conf->output) {
-		wlr_log(WLR_ERROR, "output '%s' not found",
-			panel->conf->output);
+		warn("output '%s' not found", panel->conf->output);
 		panel_destroy(panel);
 		exit(EXIT_FAILURE);
 	}
@@ -998,7 +994,7 @@ panel_setup(struct panel *panel)
 			&& panel->battery_path[0]) {
 		int tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
 		if (tfd < 0) {
-			wlr_log(WLR_ERROR, "timerfd_create failed for battery");
+			warn("timerfd_create failed for battery");
 			panel->pollfds[FD_BATTERY].fd = -1;
 		} else {
 			struct itimerspec battery_timer = {
@@ -1006,8 +1002,7 @@ panel_setup(struct panel *panel)
 				.it_value.tv_sec = 30,
 			};
 			if (timerfd_settime(tfd, 0, &battery_timer, NULL) < 0) {
-				wlr_log(WLR_ERROR,
-					"timerfd_settime failed for battery");
+				warn("timerfd_settime failed for battery");
 				close(tfd);
 				panel->pollfds[FD_BATTERY].fd = -1;
 			} else {
@@ -1109,7 +1104,7 @@ usage(void)
 int
 main(int argc, char **argv)
 {
-	enum wlr_log_importance verbosity = WLR_ERROR;
+	enum log_importance verbosity = LOG_ERROR;
 	const char *config_file = NULL;
 
 	struct conf conf = { 0 };
@@ -1127,10 +1122,10 @@ main(int argc, char **argv)
 			config_file = optarg;
 			break;
 		case 'd':
-			verbosity = WLR_DEBUG;
+			verbosity = LOG_DEBUG;
 			break;
 		case 'V':
-			verbosity = WLR_INFO;
+			verbosity = LOG_INFO;
 			break;
 		case 'o':
 			xstrdup_replace(conf.output, optarg);
@@ -1144,7 +1139,7 @@ main(int argc, char **argv)
 		usage();
 	}
 
-	wlr_log_init(verbosity, NULL);
+	log_init(verbosity);
 
 	conf_load(&conf, config_file);
 

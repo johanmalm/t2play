@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <assert.h>
-#include <stdlib.h>
 #include <string.h>
 #include <wayland-client.h>
-#include <wlr/util/log.h>
+#include "common/log.h"
 #include "common/mem.h"
 #include "ext-foreign-toplevel-list-v1-client-protocol.h"
 #include "ext-image-capture-source-v1-client-protocol.h"
@@ -345,7 +344,7 @@ do_capture(struct thumbnail *thumb,
 
 	if (!panel->ext_image_capture_source_mgr
 			|| !panel->ext_image_copy_capture_mgr) {
-		wlr_log(WLR_DEBUG, "thumbnail: capture managers not available");
+		debug("thumbnail: capture managers not available");
 		return false;
 	}
 
@@ -354,7 +353,7 @@ do_capture(struct thumbnail *thumb,
 		ext_foreign_toplevel_image_capture_source_manager_v1_create_source(
 			panel->ext_image_capture_source_mgr, ext_handle);
 	if (!source) {
-		wlr_log(WLR_DEBUG, "thumbnail: failed to create capture source");
+		debug("thumbnail: failed to create capture source");
 		return false;
 	}
 
@@ -363,7 +362,7 @@ do_capture(struct thumbnail *thumb,
 		panel->ext_image_copy_capture_mgr, source, 0);
 	ext_image_capture_source_v1_destroy(source);
 	if (!thumb->session) {
-		wlr_log(WLR_DEBUG, "thumbnail: failed to create capture session");
+		debug("thumbnail: failed to create capture session");
 		return false;
 	}
 	ext_image_copy_capture_session_v1_add_listener(thumb->session,
@@ -379,7 +378,7 @@ do_capture(struct thumbnail *thumb,
 
 	/* Note: we ignore has_shm_format here, which is what grim does */
 	if (!thumb->got_constraints || !thumb->capture_width || !thumb->capture_height) {
-		wlr_log(WLR_DEBUG, "thumbnail: missing buffer constraints");
+		debug("thumbnail: missing buffer constraints");
 		ext_image_copy_capture_session_v1_destroy(thumb->session);
 		thumb->session = NULL;
 		return false;
@@ -390,7 +389,7 @@ do_capture(struct thumbnail *thumb,
 		thumb->capture_buffers,
 		thumb->capture_width, thumb->capture_height);
 	if (!cap_buf) {
-		wlr_log(WLR_DEBUG, "thumbnail: failed to allocate capture buffer");
+		debug("thumbnail: failed to allocate capture buffer");
 		ext_image_copy_capture_session_v1_destroy(thumb->session);
 		thumb->session = NULL;
 		return false;
@@ -402,7 +401,7 @@ do_capture(struct thumbnail *thumb,
 	thumb->frame = ext_image_copy_capture_session_v1_create_frame(
 		thumb->session);
 	if (!thumb->frame) {
-		wlr_log(WLR_DEBUG, "thumbnail: failed to create capture frame");
+		debug("thumbnail: failed to create capture frame");
 		ext_image_copy_capture_session_v1_destroy(thumb->session);
 		thumb->session = NULL;
 		return false;
@@ -434,7 +433,7 @@ do_capture(struct thumbnail *thumb,
 	thumb->session = NULL;
 
 	if (!thumb->frame_done) {
-		wlr_log(WLR_DEBUG, "thumbnail: frame capture did not complete");
+		debug("thumbnail: frame capture did not complete");
 		return false;
 	}
 
@@ -481,7 +480,7 @@ thumbnail_show(struct panel *panel, struct toplevel *toplevel)
 	struct ext_foreign_toplevel_handle_v1 *ext_handle =
 		find_ext_handle(panel, toplevel);
 	if (!ext_handle) {
-		wlr_log(WLR_DEBUG, "thumbnail: no ext handle for '%s'",
+		debug("thumbnail: no ext handle for '%s'",
 			toplevel->title ? toplevel->title : "(null)");
 		return;
 	}
@@ -498,14 +497,14 @@ thumbnail_show(struct panel *panel, struct toplevel *toplevel)
 	/* Create the popup surface */
 	thumb->popup_surface = wl_compositor_create_surface(panel->compositor);
 	if (!thumb->popup_surface) {
-		wlr_log(WLR_DEBUG, "thumbnail: failed to create popup surface");
+		debug("thumbnail: failed to create popup surface");
 		goto cleanup_image;
 	}
 
 	thumb->xdg_surface = xdg_wm_base_get_xdg_surface(panel->xdg_wm_base,
 		thumb->popup_surface);
 	if (!thumb->xdg_surface) {
-		wlr_log(WLR_DEBUG, "thumbnail: failed to create xdg_surface");
+		debug("thumbnail: failed to create xdg_surface");
 		goto cleanup_surface;
 	}
 	xdg_surface_add_listener(thumb->xdg_surface,
@@ -534,7 +533,7 @@ thumbnail_show(struct panel *panel, struct toplevel *toplevel)
 		NULL, positioner);
 	xdg_positioner_destroy(positioner);
 	if (!thumb->xdg_popup) {
-		wlr_log(WLR_DEBUG, "thumbnail: failed to create xdg_popup");
+		debug("thumbnail: failed to create xdg_popup");
 		goto cleanup_xdg_surface;
 	}
 	zwlr_layer_surface_v1_get_popup(panel->layer_surface, thumb->xdg_popup);

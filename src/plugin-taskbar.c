@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <assert.h>
-#include <wlr/util/box.h>
-#include <wlr/util/log.h>
 #include "conf.h"
+#include "common/box.h"
 #include "common/mem.h"
 #include "panel.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 
-static struct wlr_box
+static struct box
 button_size(struct widget *widget, PangoRectangle rect, int padding)
 {
 	struct conf *conf = widget->panel->conf;
-	struct wlr_box box = {
+	struct box box = {
 		.width = rect.width + 2 * padding,
 		.height = conf->panel_breadth - 2 * conf->taskbar_padding,
 	};
@@ -37,7 +36,7 @@ toplevel_update_surface(struct toplevel *toplevel)
 	PangoRectangle rect =
 		get_text_size(panel->conf->font_description, label);
 	int padding = panel->conf->task_padding;
-	struct wlr_box box = button_size(widget, rect, padding);
+	struct box box = button_size(widget, rect, padding);
 
 	widget->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
 		box.width, box.height);
