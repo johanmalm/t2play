@@ -374,10 +374,11 @@ do_capture(struct thumbnail *thumb,
 	thumb->has_shm_format = false;
 	thumb->capture_width = 0;
 	thumb->capture_height = 0;
+
 	wl_display_roundtrip(panel->display);
 
-	if (!thumb->got_constraints || !thumb->has_shm_format
-			|| !thumb->capture_width || !thumb->capture_height) {
+	/* Note: we ignore has_shm_format here, which is what grim does */
+	if (!thumb->got_constraints || !thumb->capture_width || !thumb->capture_height) {
 		wlr_log(WLR_DEBUG, "thumbnail: missing buffer constraints");
 		ext_image_copy_capture_session_v1_destroy(thumb->session);
 		thumb->session = NULL;
