@@ -1,5 +1,6 @@
 sources = files(
   'conf.c',
+  'desktop-entry.c',
   'main.c',
   'plugin-battery.c',
   'plugin-clock.c',

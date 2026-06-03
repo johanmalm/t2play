@@ -29,6 +29,7 @@ wayland_protos = dependency('wayland-protocols', version: '>=1.24')
 wayland_scanner_dep = dependency('wayland-scanner', native: true)
 libsfdo_desktop = dependency('libsfdo-desktop')
 libsfdo_basedir = dependency('libsfdo-basedir')
+libsfdo_icon = dependency('libsfdo-icon')
 xkbcommon = dependency('xkbcommon')
 libxml2 = dependency('libxml-2.0')
 
@@ -81,6 +82,7 @@ executable(
     xkbcommon,
     libsfdo_desktop,
     libsfdo_basedir,
+    libsfdo_icon,
     libxml2,
   ],
 )

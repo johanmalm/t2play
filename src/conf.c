@@ -10,6 +10,7 @@
 #include "common/string-helpers.h"
 #include "common/hex.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
+#include "panel.h"
 
 struct yaml_conf {
 	/* colors */

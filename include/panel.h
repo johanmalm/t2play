@@ -204,6 +204,13 @@ enum {
 	NR_FDS,
 };
 
+struct sfdo {
+	struct sfdo_desktop_ctx *desktop_ctx;
+	struct sfdo_icon_ctx *icon_ctx;
+	struct sfdo_desktop_db *desktop_db;
+	struct sfdo_icon_theme *icon_theme;
+};
+
 struct panel {
 	bool run_display;
 
@@ -247,6 +254,8 @@ struct panel {
 	struct conf *conf;
 	char *message;
 	struct pollfd pollfds[NR_FDS];
+
+	struct sfdo *sfdo;
 };
 
 void render_frame(struct panel *panel);

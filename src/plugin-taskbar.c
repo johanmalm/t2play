@@ -3,15 +3,17 @@
 #include "conf.h"
 #include "common/box.h"
 #include "common/mem.h"
+#include "desktop-entry.h"
 #include "panel.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
 
 static struct box
 button_size(struct widget *widget, PangoRectangle rect, int padding)
 {
+	int ICON_SIZE = 22;
 	struct conf *conf = widget->panel->conf;
 	struct box box = {
-		.width = rect.width + 2 * padding,
+		.width = rect.width + 3 * padding + ICON_SIZE,
 		.height = conf->panel_breadth - 2 * conf->taskbar_padding,
 	};
 	box.width = MIN(box.width, BUTTON_MAX_WIDTH);
@@ -46,6 +48,7 @@ toplevel_update_surface(struct toplevel *toplevel)
 	toplevel->base.box.height = box.height;
 
 	/* Draw background */
+	cairo_save(cairo);
 	rounded_rect(cairo, box.width, box.height, 6);
 	if (toplevel->active) {
 		cairo_set_source_u32(cairo, panel->conf->button_active);
@@ -53,12 +56,16 @@ toplevel_update_surface(struct toplevel *toplevel)
 		cairo_set_source_u32(cairo, panel->conf->button_background);
 	}
 	cairo_fill(cairo);
+	cairo_restore(cairo);
+
+	/* Add icon */
+	int ICON_SIZE = 22;
+	desktop_entry_load_icon_from_app_id(cairo, panel, toplevel->app_id, ICON_SIZE, 1.0);
 
 	/* Draw text */
 	cairo_set_source_u32(cairo, panel->conf->text);
-	cairo_move_to(cairo, padding, (box.height - rect.height) / 2.0);
-	render_text(cairo, panel->conf->font_description, 1, false, "%s",
-		label);
+	cairo_move_to(cairo, ICON_SIZE + 2 * padding, (box.height - rect.height) / 2.0);
+	render_text(cairo, panel->conf->font_description, 1, false, "%s", label);
 	cairo_destroy(cairo);
 }
 

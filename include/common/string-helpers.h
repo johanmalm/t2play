@@ -5,5 +5,6 @@
 
 bool string_null_or_empty(const char *s);
 char *strdup_printf(const char *fmt, ...);
+bool str_endswith_ignore_case(const char *const string, const char *const suffix);
 
 #endif /* LABWC_STRING_HELPERS_H */

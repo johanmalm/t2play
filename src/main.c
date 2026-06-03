@@ -33,6 +33,7 @@
 #include "common/box.h"
 #include "common/log.h"
 #include "common/mem.h"
+#include "desktop-entry.h"
 #include "panel.h"
 
 static void
@@ -1141,11 +1142,12 @@ main(int argc, char **argv)
 
 	log_init(verbosity);
 
-	conf_load(&conf, config_file);
-
 	struct panel panel = {
 		.conf = &conf,
 	};
+
+	desktop_entry_init(&panel);
+	conf_load(&conf, config_file);
 
 	wl_list_init(&panel.outputs);
 	wl_list_init(&panel.seats);
@@ -1156,6 +1158,8 @@ main(int argc, char **argv)
 
 	panel_setup(&panel);
 	panel_run(&panel);
+
+	desktop_entry_finish(&panel);
 	panel_destroy(&panel);
 
 	return EXIT_SUCCESS;

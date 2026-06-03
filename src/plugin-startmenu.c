@@ -658,6 +658,7 @@ app_entry_cmp(const void *a, const void *b)
 static void
 load_apps(struct startmenu *menu)
 {
+	// TOOD: Use panel->desktop_ctx etc
 	struct sfdo_basedir_ctx *basedir_ctx = sfdo_basedir_ctx_create();
 	if (!basedir_ctx) {
 		warn("startmenu: failed to create basedir context");
