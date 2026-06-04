@@ -122,8 +122,7 @@ load(struct conf *conf, const char *path)
 		return;
 	}
 	if (err != CYAML_OK) {
-		warn("failed to load config '%s': %s", path,
-			cyaml_strerror(err));
+		warn("failed to load config '%s': %s", path, cyaml_strerror(err));
 		return;
 	}
 	if (!data) {
@@ -147,16 +146,15 @@ get_paths(struct wl_array *paths)
 	dir = sfdo_basedir_get_config_home(ctx, &dir_len);
 	if (dir) {
 		array_add(paths, strdup_printf("%st2play/config.yaml", dir));
-
 	}
+
 	/* Build XDG_CONFIG_DIRS paths */
 	const struct sfdo_string *dirs;
 	size_t n_dirs;
 	dirs = sfdo_basedir_get_config_system_dirs(ctx, &n_dirs);
 	for (size_t i = 0; i < n_dirs; i++) {
 		if (dirs[i].data) {
-			array_add(paths, strdup_printf("%st2play/config.yaml",
-				dirs[i].data));
+			array_add(paths, strdup_printf("%st2play/config.yaml", dirs[i].data));
 		}
 	}
 	sfdo_basedir_ctx_destroy(ctx);

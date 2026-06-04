@@ -101,9 +101,7 @@ update_widget_positions(struct panel *panel)
 
 	/* Set taskbar toplevel x-positions */
 	if (taskbar) {
-
 		// TODO: Set toplevel widths more intelligently
-
 		int spacing = panel->conf->taskbar_spacing;
 		x = taskbar->box.x;
 		wl_list_for_each(widget, &panel->widgets, link) {
@@ -819,20 +817,18 @@ handle_global(void *data, struct wl_registry *registry, uint32_t name,
 	const char *interface, uint32_t version)
 {
 	struct panel *panel = data;
-	if (strcmp(interface, wl_compositor_interface.name) == 0) {
+	if (!strcmp(interface, wl_compositor_interface.name)) {
 		panel->compositor = wl_registry_bind(registry, name,
 			&wl_compositor_interface, 4);
-	} else if (strcmp(interface, wl_seat_interface.name) == 0) {
+	} else if (!strcmp(interface, wl_seat_interface.name)) {
 		struct seat *seat = znew(*seat);
 		seat->panel = panel;
 		seat->wl_name = name;
-		seat->wl_seat =
-			wl_registry_bind(registry, name, &wl_seat_interface, 5);
+		seat->wl_seat = wl_registry_bind(registry, name, &wl_seat_interface, 5);
 		wl_seat_add_listener(seat->wl_seat, &seat_listener, seat);
 		wl_list_insert(&panel->seats, &seat->link);
-	} else if (strcmp(interface, wl_shm_interface.name) == 0) {
-		panel->shm =
-			wl_registry_bind(registry, name, &wl_shm_interface, 1);
+	} else if (!strcmp(interface, wl_shm_interface.name)) {
+		panel->shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
 	} else if (strcmp(interface, wl_output_interface.name) == 0) {
 		if (!panel->output) {
 			struct output *output = znew(*output);
@@ -842,44 +838,34 @@ handle_global(void *data, struct wl_registry *registry, uint32_t name,
 			output->scale = 1;
 			output->panel = panel;
 			wl_list_insert(&panel->outputs, &output->link);
-			wl_output_add_listener(output->wl_output,
-				&output_listener, output);
+			wl_output_add_listener(output->wl_output, &output_listener, output);
 		}
-	} else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
+	} else if (!strcmp(interface, zwlr_layer_shell_v1_interface.name)) {
 		panel->layer_shell = wl_registry_bind(registry, name,
 			&zwlr_layer_shell_v1_interface, 1);
-	} else if (strcmp(interface, wp_cursor_shape_manager_v1_interface.name)
-		== 0) {
+	} else if (!strcmp(interface, wp_cursor_shape_manager_v1_interface.name)) {
 		panel->cursor_shape_manager = wl_registry_bind(registry, name,
 			&wp_cursor_shape_manager_v1_interface, 1);
-	} else if (strcmp(interface,
-			   zwlr_foreign_toplevel_manager_v1_interface.name)
-		== 0) {
+	} else if (!strcmp(interface, zwlr_foreign_toplevel_manager_v1_interface.name)) {
 		panel->toplevel_manager = wl_registry_bind(registry, name,
 			&zwlr_foreign_toplevel_manager_v1_interface, 3);
 		plugin_taskbar_init(panel);
-	} else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
+	} else if (!strcmp(interface, xdg_wm_base_interface.name)) {
 		panel->xdg_wm_base = wl_registry_bind(registry, name,
 			&xdg_wm_base_interface, 2);
 		xdg_wm_base_add_listener(panel->xdg_wm_base,
 			&xdg_wm_base_listener, NULL);
-	} else if (strcmp(interface, ext_foreign_toplevel_list_v1_interface.name)
-			== 0) {
+	} else if (!strcmp(interface, ext_foreign_toplevel_list_v1_interface.name)) {
 		panel->ext_toplevel_list = wl_registry_bind(registry, name,
 			&ext_foreign_toplevel_list_v1_interface, 1);
 		thumbnail_bind_ext_toplevel_list(panel);
-	} else if (strcmp(interface,
-			ext_foreign_toplevel_image_capture_source_manager_v1_interface.name)
-			== 0) {
-		panel->ext_image_capture_source_mgr = wl_registry_bind(registry,
-			name,
-			&ext_foreign_toplevel_image_capture_source_manager_v1_interface,
-			1);
-	} else if (strcmp(interface,
-			ext_image_copy_capture_manager_v1_interface.name)
-			== 0) {
-		panel->ext_image_copy_capture_mgr = wl_registry_bind(registry,
-			name, &ext_image_copy_capture_manager_v1_interface, 1);
+	} else if (!strcmp(interface,
+			ext_foreign_toplevel_image_capture_source_manager_v1_interface.name)) {
+		panel->ext_image_capture_source_mgr = wl_registry_bind(registry, name,
+			&ext_foreign_toplevel_image_capture_source_manager_v1_interface, 1);
+	} else if (!strcmp(interface, ext_image_copy_capture_manager_v1_interface.name)) {
+		panel->ext_image_copy_capture_mgr = wl_registry_bind(registry, name,
+			&ext_image_copy_capture_manager_v1_interface, 1);
 	}
 }
 

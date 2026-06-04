@@ -109,7 +109,7 @@ handle_toplevel_title(void *data, struct zwlr_foreign_toplevel_handle_v1 *handle
 
 static void
 handle_toplevel_app_id(void *data, struct zwlr_foreign_toplevel_handle_v1 *handle,
-	       const char *app_id)
+		const char *app_id)
 {
 	struct toplevel *toplevel = data;
 	xstrdup_replace(toplevel->app_id, app_id);
