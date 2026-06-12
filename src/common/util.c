@@ -4,6 +4,35 @@
 #include "common/string-helpers.h"
 #include "pango/pango-layout.h"
 
+static PangoContext *text_measure_context;
+static PangoLayout *text_measure_layout;
+
+static void
+text_measure_init(void)
+{
+	if (!text_measure_context) {
+		PangoFontMap *fontmap = pango_cairo_font_map_get_default();
+
+		text_measure_context = pango_font_map_create_context(fontmap);
+		pango_context_set_round_glyph_positions(
+			text_measure_context, false);
+		text_measure_layout = pango_layout_new(text_measure_context);
+	}
+}
+
+void
+text_measure_fini(void)
+{
+	if (text_measure_layout) {
+		g_object_unref(text_measure_layout);
+		text_measure_layout = NULL;
+	}
+	if (text_measure_context) {
+		g_object_unref(text_measure_context);
+		text_measure_context = NULL;
+	}
+}
+
 PangoRectangle
 get_text_size(const PangoFontDescription *desc, const char *string)
 {
@@ -11,27 +40,17 @@ get_text_size(const PangoFontDescription *desc, const char *string)
 	if (string_null_or_empty(string)) {
 		return rect;
 	}
-	cairo_surface_t *surface;
-	cairo_t *c;
-	PangoLayout *layout;
 
-	surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
-	c = cairo_create(surface);
-	layout = pango_cairo_create_layout(c);
-	pango_context_set_round_glyph_positions(
-		pango_layout_get_context(layout), false);
+	text_measure_init();
 
-	pango_layout_set_font_description(layout, desc);
-	pango_layout_set_text(layout, string, -1);
-	pango_layout_set_single_paragraph_mode(layout, TRUE);
-	pango_layout_set_width(layout, -1);
-	pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_MIDDLE);
-	pango_layout_get_extents(layout, NULL, &rect);
+	pango_layout_set_font_description(text_measure_layout, desc);
+	pango_layout_set_text(text_measure_layout, string, -1);
+	pango_layout_set_single_paragraph_mode(text_measure_layout, TRUE);
+	pango_layout_set_width(text_measure_layout, -1);
+	pango_layout_set_ellipsize(text_measure_layout, PANGO_ELLIPSIZE_MIDDLE);
+	pango_layout_get_extents(text_measure_layout, NULL, &rect);
 	pango_extents_to_pixels(&rect, NULL);
 
-	cairo_destroy(c);
-	cairo_surface_destroy(surface);
-	g_object_unref(layout);
 	return rect;
 }
 

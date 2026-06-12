@@ -99,6 +99,10 @@ destroy_buffer(struct pool_buffer *buffer)
 		wl_buffer_destroy(buffer->buffer);
 		buffer->buffer = NULL;
 	}
+	if (buffer->pango) {
+		g_object_unref(buffer->pango);
+		buffer->pango = NULL;
+	}
 	if (buffer->cairo) {
 		cairo_destroy(buffer->cairo);
 		buffer->cairo = NULL;
@@ -106,10 +110,6 @@ destroy_buffer(struct pool_buffer *buffer)
 	if (buffer->surface) {
 		cairo_surface_destroy(buffer->surface);
 		buffer->surface = NULL;
-	}
-	if (buffer->pango) {
-		g_object_unref(buffer->pango);
-		buffer->pango = NULL;
 	}
 	if (buffer->data) {
 		munmap(buffer->data, buffer->size);

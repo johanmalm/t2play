@@ -221,6 +221,7 @@ conf_init(struct conf *conf)
 void
 conf_destroy(struct conf *conf)
 {
+	text_measure_fini();
 	pango_font_description_free(conf->font_description);
 	zfree(conf->panel_items);
 	zfree(conf->startmenu_layout);

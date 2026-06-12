@@ -268,6 +268,7 @@ void render_text(cairo_t *cairo, const PangoFontDescription *desc, double scale,
 	bool markup, const char *fmt, ...);
 PangoRectangle get_text_size(const PangoFontDescription *desc,
 	const char *string);
+void text_measure_fini(void);
 void cairo_set_source_u32(cairo_t *cairo, uint32_t color);
 void rounded_rect(cairo_t *cairo, double w, double h, double r);
 
