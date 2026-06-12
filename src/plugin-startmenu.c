@@ -921,6 +921,12 @@ plugin_startmenu_key(struct panel *panel, uint32_t key)
 		startmenu_render_popup(menu);
 		break;
 	case KEY_ENTER: {
+		if (menu->search[0] == ':') {
+			if (!strcmp(menu->search, ":exit")) {
+				exit(EXIT_FAILURE);
+			}
+			break;
+		}
 		int idx = menu->selected >= 0 ? menu->selected
 			: (menu->hover >= 0
 				? menu->scroll_offset + menu->hover : -1);
