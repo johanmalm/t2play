@@ -13,8 +13,8 @@ struct conf {
 	/* colors */
 	uint32_t background;
 	uint32_t text;
-	uint32_t button_background;
-	uint32_t button_active;
+	uint32_t task_background_color;
+	uint32_t task_active_background_color;
 
 	/* panel */
 	char *panel_items;

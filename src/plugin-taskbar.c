@@ -51,9 +51,9 @@ toplevel_update_surface(struct toplevel *toplevel)
 	cairo_save(cairo);
 	rounded_rect(cairo, box.width, box.height, 6);
 	if (toplevel->active) {
-		cairo_set_source_u32(cairo, panel->conf->button_active);
+		cairo_set_source_u32(cairo, panel->conf->task_active_background_color);
 	} else {
-		cairo_set_source_u32(cairo, panel->conf->button_background);
+		cairo_set_source_u32(cairo, panel->conf->task_background_color);
 	}
 	cairo_fill(cairo);
 	cairo_restore(cairo);

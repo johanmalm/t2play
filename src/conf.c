@@ -16,8 +16,8 @@ struct yaml_conf {
 	/* colors */
 	char *background;
 	char *text;
-	char *button_background;
-	char *button_active;
+	char *task_background_color;
+	char *task_active_background_color;
 
 	/* panel */
 	char *panel_items;
@@ -45,8 +45,8 @@ struct yaml_conf {
 static const cyaml_schema_field_t yaml_conf_fields[] = {
 	CYAML_FIELD_STRING_PTR("background", CYAML_FLAG_OPTIONAL, struct yaml_conf, background, 0, CYAML_UNLIMITED),
 	CYAML_FIELD_STRING_PTR("text", CYAML_FLAG_OPTIONAL, struct yaml_conf, text, 0, CYAML_UNLIMITED),
-	CYAML_FIELD_STRING_PTR("button_background", CYAML_FLAG_OPTIONAL, struct yaml_conf, button_background, 0, CYAML_UNLIMITED),
-	CYAML_FIELD_STRING_PTR("button_active", CYAML_FLAG_OPTIONAL, struct yaml_conf, button_active, 0, CYAML_UNLIMITED),
+	CYAML_FIELD_STRING_PTR("task_background_color", CYAML_FLAG_OPTIONAL, struct yaml_conf, task_background_color, 0, CYAML_UNLIMITED),
+	CYAML_FIELD_STRING_PTR("task_active_background_color", CYAML_FLAG_OPTIONAL, struct yaml_conf, task_active_background_color, 0, CYAML_UNLIMITED),
 
 	CYAML_FIELD_STRING_PTR("panel_items", CYAML_FLAG_OPTIONAL, struct yaml_conf, panel_items, 0, CYAML_UNLIMITED),
 	CYAML_FIELD_INT("panel_breadth", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, panel_breadth),
@@ -87,8 +87,8 @@ parse(struct conf *conf, struct yaml_conf *data)
 {
 	PARSE_COL(background);
 	PARSE_COL(text);
-	PARSE_COL(button_background);
-	PARSE_COL(button_active);
+	PARSE_COL(task_background_color);
+	PARSE_COL(task_active_background_color);
 
 	PARSE_STR(panel_items);
 	PARSE_INT(panel_breadth);
@@ -198,8 +198,8 @@ conf_init(struct conf *conf)
 
 	conf->background = 0x323232FF;
 	conf->text = 0xFFFFFFFF;
-	conf->button_background = 0x4A4A4AFF;
-	conf->button_active = 0x5A8AC6FF;
+	conf->task_background_color = 0x4A4A4AFF;
+	conf->task_active_background_color = 0x5A8AC6FF;
 
 	conf->panel_items = xstrdup("STBKC");
 	conf->panel_breadth = 40;

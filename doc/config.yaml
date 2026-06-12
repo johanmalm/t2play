@@ -11,8 +11,8 @@ taskbar_padding: 8
 taskbar_spacing: 6
 
 task_padding: 8
-button_background: '#4A4A4AFF'
-button_active: '#5A8AC6FF'
+task_background_color: '#4A4A4AFF'
+task_active_background_color: '#5A8AC6FF'
 
 # Startmenu
 startmenu_layout: |

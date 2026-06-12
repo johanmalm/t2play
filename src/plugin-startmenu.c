@@ -385,7 +385,7 @@ startmenu_render_button(struct startmenu *menu)
 		widget->box.width, panel->box.height);
 	cairo_t *cr = cairo_create(widget->surface);
 
-//	cairo_set_source_u32(cr, panel->conf->button_background);
+//	cairo_set_source_u32(cr, panel->conf->task_background_color);
 //	cairo_rectangle(cr, 0, 0, widget->box.width, panel->box.height);
 //	cairo_fill(cr);
 
@@ -445,7 +445,7 @@ startmenu_render_popup(struct startmenu *menu)
 		if (!r.width) {
 			r.width = width;
 		}
-		cairo_set_source_u32(cr, panel->conf->button_background);
+		cairo_set_source_u32(cr, panel->conf->task_background_color);
 		cairo_rectangle(cr, r.x, r.y, r.width, r.height);
 		cairo_fill(cr);
 
@@ -491,7 +491,7 @@ startmenu_render_popup(struct startmenu *menu)
 
 		if (menu->n_filtered == 0) {
 			int y = r.y;
-			cairo_set_source_u32(cr, panel->conf->button_background);
+			cairo_set_source_u32(cr, panel->conf->task_background_color);
 			cairo_rectangle(cr, r.x, y, r.width, MENU_ITEM_HEIGHT);
 			cairo_fill(cr);
 			PangoRectangle text_rect = get_text_size(
@@ -503,7 +503,7 @@ startmenu_render_popup(struct startmenu *menu)
 				"No results");
 			for (int row = 1; row < visible_rows; row++) {
 				y = r.y + row * MENU_ITEM_HEIGHT;
-				cairo_set_source_u32(cr, panel->conf->button_background);
+				cairo_set_source_u32(cr, panel->conf->task_background_color);
 				cairo_rectangle(cr, r.x, y, r.width, MENU_ITEM_HEIGHT);
 				cairo_fill(cr);
 			}
@@ -513,16 +513,16 @@ startmenu_render_popup(struct startmenu *menu)
 				int y = r.y + row * MENU_ITEM_HEIGHT;
 
 				if (idx >= menu->n_filtered) {
-					cairo_set_source_u32(cr, panel->conf->button_background);
+					cairo_set_source_u32(cr, panel->conf->task_background_color);
 					cairo_rectangle(cr, r.x, y, r.width, MENU_ITEM_HEIGHT);
 					cairo_fill(cr);
 					continue;
 				}
 
 				if (row == highlighted) {
-					cairo_set_source_u32(cr, panel->conf->button_active);
+					cairo_set_source_u32(cr, panel->conf->task_active_background_color);
 				} else {
-					cairo_set_source_u32(cr, panel->conf->button_background);
+					cairo_set_source_u32(cr, panel->conf->task_background_color);
 				}
 				cairo_rectangle(cr, r.x, y, r.width, MENU_ITEM_HEIGHT);
 				cairo_fill(cr);
