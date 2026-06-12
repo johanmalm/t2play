@@ -36,10 +36,28 @@ jobs:
           sed -i '/^Types/ s/deb/& deb-src/' /etc/apt/sources.list.d/debian.sources
           apt-get update
           apt-get upgrade -y
-          apt-get install -y git gcc clang gdb xwayland
-          apt-get build-dep -y labwc
-          apt-get build-dep -y libxkbcommon-dev
-          apt-get install -y libyaml-dev libcyaml-dev
+          apt-get install -y \
+            git \
+            gcc \
+            ninja-build \
+            meson \
+            pkg-config \
+            libglib2.0-dev \
+            libcairo2-dev \
+            libpango1.0-dev \
+            libxml2-dev \
+            libinput-dev \
+            libpng-dev \
+            librsvg2-dev \
+            xwayland \
+            libwayland-client0 \
+            libwayland-dev \
+            wayland-protocols \
+            libsfdo-dev \
+            libxkbcommon-dev \
+            libyaml-dev \
+            libcyaml-dev \
+            scdoc
 
       # These builds are executed on all runners
       - name: Build with gcc
