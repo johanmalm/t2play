@@ -923,7 +923,7 @@ plugin_startmenu_key(struct panel *panel, uint32_t key)
 	case KEY_ENTER: {
 		if (menu->search[0] == ':') {
 			if (!strcmp(menu->search, ":exit")) {
-				exit(EXIT_FAILURE);
+				panel->run_display = false;
 			}
 			break;
 		}
