@@ -40,6 +40,27 @@ Features:
 *color*
 	Hexadecimal RGB/RGBA value using syntax *#rrggbb* or *#rrggbbaa*
 
+*integer*
+	Integer
+
+*string*
+	String. Multiline strings can be used like this:
+	```
+	startmenu_layout: |
+	    <vbox>
+	      <search />
+	      <applist />
+	    </vbox>
+	```
+
+## General
+
+*background: <color>*
+	Global background color used when nothing else is specified.
+
+*text: <color>*
+	Global text color used when nothing else is specified.
+
 ## Panel
 
 *panel_items: string*
@@ -77,14 +98,49 @@ taskbar.
 	```
 
 *task_padding: <integer>*
-	The space between the edges of the task and the content within it
+	The distance between the task edges and the content within it. Default
+	is 8.
 
 *task_background_color = <color>*
-	Background color for non-selected tasks
+	Background color for non-selected tasks.
 
 *task_active_background_color = <color>*
-	Background color for selected tasks
+	Background color for selected tasks.
 
 ## Startmenu
 
+*startmenu_layout: <string>*
+	Startmenu ui layout defined by XML elements. Supported elements include:
+	- *<vbox>* Vertical Layout
+	- *<hbox>* Horizontal Layout
+	- *<search>* Type-to-search box for applications
+	- *<applist>* List of applications installed on the system
+
+	Default is:
+
+	```
+	startmenu_layout: |
+	    <vbox>
+	      <search />
+	      <applist />
+	    </vbox>
+	```
+
+*startmenu_padding: <integer>*
+	Distance between the plugin edges and items within it. Default is 8.
+
+## Clock
+
+*clock_padding: <integer>*
+	Distance between the plugin edges and items within it. Default is 8.
+
+## Battery
+
+*battery_padding: <integer>*
+	Distance between the plugin edges and items within it. Default is 8.
+
+## Keyboard
+
+*keyboard_padding: <integer>*
+	Distance between the plugin edges and items within it. Default is 8.
 
