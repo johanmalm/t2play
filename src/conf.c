@@ -62,7 +62,7 @@ static const cyaml_schema_field_t yaml_conf_fields[] = {
 
 	CYAML_FIELD_INT("battery_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, battery_padding),
 
-	CYAML_FIELD_INT("keyboard_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, battery_padding),
+	CYAML_FIELD_INT("keyboard_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, keyboard_padding),
 
 	CYAML_FIELD_END
 };
