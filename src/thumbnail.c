@@ -376,7 +376,16 @@ do_capture(struct thumbnail *thumb,
 
 	wl_display_roundtrip(panel->display);
 
-	if (!thumb) {
+	/*
+	 * wl_display_roundtrip() dispatches all pending events, which may
+	 * include further pointer-motion events that cause thumbnail_hide()
+	 * to be called re-entrantly (e.g. from wl_pointer_motion() in
+	 * main.c). thumbnail_hide() frees *thumb* and sets panel->thumbnail
+	 * to NULL, but our local "thumb" pointer still holds the (now
+	 * dangling) address, so checking "thumb" itself is not sufficient.
+	 * Instead compare against panel->thumbnail to detect this.
+	 */
+	if (panel->thumbnail != thumb) {
 		debug("thumbnail destroyed following wl_display_roundtrip()");
 		return false;
 	}
@@ -429,6 +438,17 @@ do_capture(struct thumbnail *thumb,
 	for (int i = 0; i < MAX_CAPTURE_ROUNDTRIPS
 			&& !thumb->frame_done && !thumb->frame_failed; i++) {
 		wl_display_roundtrip(panel->display);
+
+		/*
+		 * As above, wl_display_roundtrip() may dispatch events that
+		 * cause thumbnail_hide() to free *thumb* re-entrantly. Bail
+		 * out immediately without touching "thumb" again if that
+		 * happened.
+		 */
+		if (panel->thumbnail != thumb) {
+			debug("thumbnail destroyed during frame capture roundtrip");
+			return false;
+		}
 	}
 #undef MAX_CAPTURE_ROUNDTRIPS
 
@@ -495,7 +515,17 @@ thumbnail_show(struct panel *panel, struct toplevel *toplevel)
 	panel->thumbnail = thumb;
 
 	if (!do_capture(thumb, ext_handle)) {
-		zfree(panel->thumbnail);
+		/*
+		 * do_capture() may have detected that "thumb" was already
+		 * destroyed (and possibly replaced by a different, newer
+		 * thumbnail) by re-entrant event dispatch during
+		 * wl_display_roundtrip(). Only free panel->thumbnail here if
+		 * it is still the one we just allocated, to avoid freeing
+		 * memory that is no longer ours.
+		 */
+		if (panel->thumbnail == thumb) {
+			zfree(panel->thumbnail);
+		}
 		return;
 	}
 
