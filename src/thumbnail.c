@@ -376,6 +376,11 @@ do_capture(struct thumbnail *thumb,
 
 	wl_display_roundtrip(panel->display);
 
+	if (!thumb) {
+		debug("thumbnail destroyed following wl_display_roundtrip()");
+		return false;
+	}
+
 	/* Note: we ignore has_shm_format here, which is what grim does */
 	if (!thumb->got_constraints || !thumb->capture_width || !thumb->capture_height) {
 		debug("thumbnail: missing buffer constraints");
