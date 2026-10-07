@@ -1,0 +1,21 @@
+background = #323232FF
+text = #FFFFFFFF
+
+panel_items = STBKC
+panel_breadth = 40
+
+taskbar_padding = 8
+taskbar_spacing = 6
+
+task_padding = 8
+task_background_color = #4A4A4AFF
+task_active_background_color = #5A8AC6FF
+
+startmenu_layout = <vbox><search /><applist /></vbox>
+startmenu_padding = 8
+
+clock_padding = 8
+
+battery_padding = 8
+
+keyboard_padding = 8

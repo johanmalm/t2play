@@ -18,7 +18,6 @@ add_project_arguments(
   language: 'c',
 )
 
-cyaml = dependency('libcyaml')
 cairo = dependency('cairo')
 pango = dependency('pango')
 pangocairo = dependency('pangocairo')
@@ -73,7 +72,6 @@ executable(
   include_directories: 'include',
   dependencies: [
     cairo,
-    cyaml,
     pango,
     pangocairo,
     glib,

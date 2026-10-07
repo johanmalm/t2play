@@ -1,9 +1,11 @@
 #include "conf.h"
-#include <cyaml/cyaml.h>
+#include <assert.h>
+#include <ctype.h>
 #include <sfdo-basedir.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "common/cleanup.h"
 #include "common/array.h"
 #include "common/log.h"
 #include "common/mem.h"
@@ -12,125 +14,126 @@
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "panel.h"
 
-struct yaml_conf {
-	/* colors */
-	char *background;
-	char *text;
-	char *task_background_color;
-	char *task_active_background_color;
-
-	/* panel */
-	char *panel_items;
-	int panel_breadth;
-
-	/* taskbar */
-	int taskbar_padding;
-	int taskbar_spacing;
-	int task_padding;
-
-	/* startmenu */
-	char *startmenu_layout;
-	int startmenu_padding;
-
-	/* clock */
-	int clock_padding;
-
-	/* battery */
-	int battery_padding;
-
-	/* keyboard */
-	int keyboard_padding;
-};
-
-static const cyaml_schema_field_t yaml_conf_fields[] = {
-	CYAML_FIELD_STRING_PTR("background", CYAML_FLAG_OPTIONAL, struct yaml_conf, background, 0, CYAML_UNLIMITED),
-	CYAML_FIELD_STRING_PTR("text", CYAML_FLAG_OPTIONAL, struct yaml_conf, text, 0, CYAML_UNLIMITED),
-	CYAML_FIELD_STRING_PTR("task_background_color", CYAML_FLAG_OPTIONAL, struct yaml_conf, task_background_color, 0, CYAML_UNLIMITED),
-	CYAML_FIELD_STRING_PTR("task_active_background_color", CYAML_FLAG_OPTIONAL, struct yaml_conf, task_active_background_color, 0, CYAML_UNLIMITED),
-
-	CYAML_FIELD_STRING_PTR("panel_items", CYAML_FLAG_OPTIONAL, struct yaml_conf, panel_items, 0, CYAML_UNLIMITED),
-	CYAML_FIELD_INT("panel_breadth", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, panel_breadth),
-
-	CYAML_FIELD_INT("taskbar_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, taskbar_padding),
-	CYAML_FIELD_INT("taskbar_spacing", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, taskbar_spacing),
-	CYAML_FIELD_INT("task_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, task_padding),
-
-	CYAML_FIELD_STRING_PTR("startmenu_layout", CYAML_FLAG_OPTIONAL, struct yaml_conf, startmenu_layout, 0, CYAML_UNLIMITED),
-	CYAML_FIELD_INT("startmenu_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, startmenu_padding),
-
-	CYAML_FIELD_INT("clock_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, clock_padding),
-
-	CYAML_FIELD_INT("battery_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, battery_padding),
-
-	CYAML_FIELD_INT("keyboard_padding", CYAML_FLAG_OPTIONAL | CYAML_FLAG_POINTER, struct yaml_conf, keyboard_padding),
-
-	CYAML_FIELD_END
-};
-
-static const cyaml_schema_value_t yaml_conf_schema = {
-	CYAML_VALUE_MAPPING(CYAML_FLAG_POINTER, struct yaml_conf, yaml_conf_fields),
-};
-
-static const cyaml_config_t yaml_cyaml_config = {
-	.log_fn = cyaml_log,
-	.mem_fn = cyaml_mem,
-	.log_level = CYAML_LOG_WARNING,
-	.flags = CYAML_CFG_IGNORE_UNKNOWN_KEYS,
-};
-
-#define PARSE_COL(str) if (data->str) { conf->str = parse_hex(data->str); }
-#define PARSE_STR(str) if (data->str) { xstrdup_replace(conf->str, data->str); }
-#define PARSE_INT(str) if (data->str) { conf->str = data->str; }
-
 static void
-parse(struct conf *conf, struct yaml_conf *data)
+rtrim(char *s)
 {
-	PARSE_COL(background);
-	PARSE_COL(text);
-	PARSE_COL(task_background_color);
-	PARSE_COL(task_active_background_color);
-
-	PARSE_STR(panel_items);
-	PARSE_INT(panel_breadth);
-
-	PARSE_INT(taskbar_padding);
-	PARSE_INT(taskbar_spacing);
-	PARSE_INT(task_padding);
-
-	PARSE_STR(startmenu_layout);
-	PARSE_INT(startmenu_padding);
-
-	PARSE_INT(clock_padding);
-
-	PARSE_INT(battery_padding);
-
-	PARSE_INT(keyboard_padding);
+	assert(s);
+	size_t len = strlen(s);
+	if (!len) {
+		return;
+	}
+	char *end = s + len - 1;
+	while (end >= s && isspace((unsigned char)*end)) {
+		end--;
+	}
+	*(end + 1) = '\0';
 }
 
-#undef PARSE_COLOR
+static char *
+string_strip(char *s)
+{
+	assert(s);
+	rtrim(s);
+	while (isspace((unsigned char)*s)) {
+		s++;
+	}
+	return s;
+}
 
 static void
+parse_key_value_pair(char *line, char **key, char **value, char delim)
+{
+	assert(line);
+	char *p = line;
+	while ((p[0] == ' ') || p[0] == '\t') {
+		p++;
+	}
+	if (p[0] == '#') {
+		return;
+	}
+	p = strchr(line, delim);
+	if (!p) {
+		return;
+	}
+	p[0] = '\0';
+	*key = string_strip(line);
+	*value = string_strip(++p);
+}
+
+static void
+process_line(struct conf *conf, char *line)
+{
+	char *key = NULL, *value = NULL;
+	parse_key_value_pair(line, &key, &value, '=');
+	if (!key || !value) {
+		return;
+	}
+
+	/* colors */
+	if (!strcmp(key, "background")) {
+		conf->background = parse_hex(value);
+	} else if (!strcmp(key, "text")) {
+		conf->text = parse_hex(value);
+	} else if (!strcmp(key, "task_background_color")) {
+		conf->task_background_color = parse_hex(value);
+	} else if (!strcmp(key, "task_active_background_color")) {
+		conf->task_active_background_color = parse_hex(value);
+
+	/* panel */
+	} else if (!strcmp(key, "panel_items")) {
+		xstrdup_replace(conf->panel_items, value);
+	} else if (!strcmp(key, "panel_breadth")) {
+		conf->panel_breadth = atoi(value);
+
+	/* taskbar */
+	} else if (!strcmp(key, "taskbar_padding")) {
+		conf->taskbar_padding = atoi(value);
+	} else if (!strcmp(key, "taskbar_spacing")) {
+		conf->taskbar_spacing = atoi(value);
+	} else if (!strcmp(key, "task_padding")) {
+		conf->task_padding = atoi(value);
+
+	/* startmenu */
+	} else if (!strcmp(key, "startmenu_layout")) {
+		xstrdup_replace(conf->startmenu_layout, value);
+	} else if (!strcmp(key, "startmenu_padding")) {
+		conf->startmenu_padding = atoi(value);
+
+	/* clock */
+	} else if (!strcmp(key, "clock_padding")) {
+		conf->clock_padding = atoi(value);
+
+	/* battery */
+	} else if (!strcmp(key, "battery_padding")) {
+		conf->battery_padding = atoi(value);
+
+	/* keyboard */
+	} else if (!strcmp(key, "keyboard_paddnig")) {
+		conf->keyboard_padding = atoi(value);
+	}
+}
+
+static int
 load(struct conf *conf, const char *path)
 {
 	info("reading config file '%s'", path);
 
-	struct yaml_conf *data = NULL;
-	cyaml_err_t err = cyaml_load_file(path, &yaml_cyaml_config,
-		&yaml_conf_schema, (cyaml_data_t **)&data, NULL);
-	if (err == CYAML_ERR_FILE_OPEN) {
-		info("no config file '%s'", path);
-		return;
+	cleanup_fclose FILE *fp = fopen(path, "r");
+	if (!fp) {
+		return -1;
 	}
-	if (err != CYAML_OK) {
-		warn("failed to load config '%s': %s", path, cyaml_strerror(err));
-		return;
+
+	cleanup_free char *line = NULL;
+	size_t capacity = 0;
+	ssize_t len;
+
+	while ((len = getline(&line, &capacity, fp)) != -1) {
+		if (len > 0 && line[len - 1] == '\n') {
+			line[--len] = '\0';
+		}
+		process_line(conf, line);
 	}
-	if (!data) {
-		warn("no config file data");
-		return;
-	}
-	parse(conf, data);
-	cyaml_free(&yaml_cyaml_config, &yaml_conf_schema, data, 0);
+	return 0;
 }
 
 static void
@@ -145,7 +148,7 @@ get_paths(struct wl_array *paths)
 	size_t dir_len;
 	dir = sfdo_basedir_get_config_home(ctx, &dir_len);
 	if (dir) {
-		array_add(paths, strdup_printf("%st2play/config.yaml", dir));
+		array_add(paths, strdup_printf("%st2play/config", dir));
 	}
 
 	/* Build XDG_CONFIG_DIRS paths */
