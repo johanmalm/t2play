@@ -1,0 +1,15 @@
+background = #CECECE
+text = #000000
+
+panel_items = TC
+panel_breadth = 36
+
+taskbar_padding = 2
+taskbar_spacing = 2
+
+task_padding = 2
+task_background_color = #CECECE
+task_active_background_color = #DADBDE
+task_active_border_color = #8F8F91
+
+clock_padding = 8
