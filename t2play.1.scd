@@ -44,26 +44,19 @@ Features:
 	Integer
 
 *string*
-	String. Multiline strings can be used like this:
-	```
-	startmenu_layout: |
-	    <vbox>
-	      <search />
-	      <applist />
-	    </vbox>
-	```
+	String
 
 ## General
 
-*background: <color>*
+*background = <color>*
 	Global background color used when nothing else is specified.
 
-*text: <color>*
+*text = <color>*
 	Global text color used when nothing else is specified.
 
 ## Panel
 
-*panel_items: string*
+*panel_items = string*
 	Which plugins to be shown and their order (from left to right). Each
 	letter refers to an item as defined below. Default is *STBKC*.
 	- *S* Startmenu
@@ -72,15 +65,15 @@ Features:
 	- *K* Keyboard layout
 	- *C* Clock
 
-*panel_breadth: integer*
+*panel_breadth = integer*
 
 ## Taskbar
 
 A *task* is the graphical artefact representing one application within the
 taskbar.
 
-*taskbar_padding: <integer>*++
-*taskbar_spacing: <integer>*
+*taskbar_padding = <integer>*++
+*taskbar_spacing = <integer>*
 	Taskbar padding and spacing of tasks within it. Default is 0
 	for all.
 
@@ -97,7 +90,7 @@ taskbar.
 	2. spacing
 	```
 
-*task_padding: <integer>*
+*task_padding = <integer>*
 	The distance between the task edges and the content within it. Default
 	is 8.
 
@@ -109,38 +102,30 @@ taskbar.
 
 ## Startmenu
 
-*startmenu_layout: <string>*
+*startmenu_layout = <string>*
 	Startmenu ui layout defined by XML elements. Supported elements include:
 	- *<vbox>* Vertical Layout
 	- *<hbox>* Horizontal Layout
 	- *<search>* Type-to-search box for applications
 	- *<applist>* List of applications installed on the system
 
-	Default is:
+	Default is: *<vbox><search /><applist /></vbox>*
 
-	```
-	startmenu_layout: |
-	    <vbox>
-	      <search />
-	      <applist />
-	    </vbox>
-	```
-
-*startmenu_padding: <integer>*
+*startmenu_padding = <integer>*
 	Distance between the plugin edges and items within it. Default is 8.
 
 ## Clock
 
-*clock_padding: <integer>*
+*clock_padding = <integer>*
 	Distance between the plugin edges and items within it. Default is 8.
 
 ## Battery
 
-*battery_padding: <integer>*
+*battery_padding = <integer>*
 	Distance between the plugin edges and items within it. Default is 8.
 
 ## Keyboard
 
-*keyboard_padding: <integer>*
+*keyboard_padding = <integer>*
 	Distance between the plugin edges and items within it. Default is 8.
 
