@@ -27,7 +27,6 @@ struct conf {
 	int task_padding;
 
 	/* startmenu */
-	char *startmenu_layout;
 	int startmenu_padding;
 
 	/* clock */

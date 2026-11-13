@@ -102,15 +102,6 @@ taskbar.
 
 ## Startmenu
 
-*startmenu_layout = <string>*
-	Startmenu ui layout defined by XML elements. Supported elements include:
-	- *<vbox>* Vertical Layout
-	- *<hbox>* Horizontal Layout
-	- *<search>* Type-to-search box for applications
-	- *<applist>* List of applications installed on the system
-
-	Default is: *<vbox><search /><applist /></vbox>*
-
 *startmenu_padding = <integer>*
 	Distance between the plugin edges and items within it. Default is 8.
 

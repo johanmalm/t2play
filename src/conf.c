@@ -94,8 +94,6 @@ process_line(struct conf *conf, char *line)
 		conf->task_padding = atoi(value);
 
 	/* startmenu */
-	} else if (!strcmp(key, "startmenu_layout")) {
-		xstrdup_replace(conf->startmenu_layout, value);
 	} else if (!strcmp(key, "startmenu_padding")) {
 		conf->startmenu_padding = atoi(value);
 
@@ -211,7 +209,6 @@ conf_init(struct conf *conf)
 	conf->taskbar_spacing = 6;
 	conf->task_padding = 8;
 
-	conf->startmenu_layout = xstrdup("<vbox><search/><applist/></vbox>");
 	conf->startmenu_padding = 8;
 
 	conf->clock_padding = 8;
@@ -227,5 +224,4 @@ conf_destroy(struct conf *conf)
 	text_measure_fini();
 	pango_font_description_free(conf->font_description);
 	zfree(conf->panel_items);
-	zfree(conf->startmenu_layout);
 }

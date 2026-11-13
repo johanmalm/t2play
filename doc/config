@@ -11,7 +11,6 @@ task_padding = 8
 task_background_color = #4A4A4AFF
 task_active_background_color = #5A8AC6FF
 
-startmenu_layout = <vbox><search /><applist /></vbox>
 startmenu_padding = 8
 
 clock_padding = 8

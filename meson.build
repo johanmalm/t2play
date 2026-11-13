@@ -30,7 +30,6 @@ libsfdo_desktop = dependency('libsfdo-desktop')
 libsfdo_basedir = dependency('libsfdo-basedir')
 libsfdo_icon = dependency('libsfdo-icon')
 xkbcommon = dependency('xkbcommon')
-libxml2 = dependency('libxml-2.0')
 
 subdir('src')
 
@@ -81,7 +80,6 @@ executable(
     libsfdo_desktop,
     libsfdo_basedir,
     libsfdo_icon,
-    libxml2,
   ],
 )
 

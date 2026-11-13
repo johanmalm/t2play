@@ -9,8 +9,6 @@
 #include <strings.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <libxml/parser.h>
-#include <libxml/tree.h>
 #include "conf.h"
 #include "common/box.h"
 #include "common/log.h"
@@ -78,100 +76,10 @@ static bool sm_node_add_child(struct sm_node *parent, struct sm_node *child)
 	return true;
 }
 
-static enum sm_node_type sm_name_to_type(const char *name)
+static struct sm_node *add_node(enum sm_node_type type)
 {
-	if (strcasecmp(name, "vbox") == 0) {
-		return SM_NODE_VBOX;
-	}
-	if (strcasecmp(name, "hbox") == 0) {
-		return SM_NODE_HBOX;
-	}
-	if (strcasecmp(name, "search") == 0) {
-		return SM_NODE_SEARCH;
-	}
-	if (strcasecmp(name, "applist") == 0) {
-		return SM_NODE_APPLIST;
-	}
-	return -1;
-}
-
-static struct sm_node *sm_from_xml_node(xmlNode *xn)
-{
-	if (!xn || xn->type != XML_ELEMENT_NODE) {
-		return NULL;
-	}
-
-	const char *name = (const char *)xn->name;
-	enum sm_node_type type = sm_name_to_type(name);
-	if ((int)type < 0) {
-		/* Forgiving: unknown tags are ignored, except the toplevel. */
-		return NULL;
-	}
-
 	struct sm_node *node = sm_node_new(type);
-	if (!node) {
-		return NULL;
-	}
-
-	if (type == SM_NODE_SEARCH || type == SM_NODE_APPLIST) {
-		/* Forgiving: ignore children even if present. */
-		return node;
-	}
-
-	for (xmlNode *c = xn->children; c; c = c->next) {
-		if (c->type != XML_ELEMENT_NODE) {
-			continue;
-		}
-		enum sm_node_type ct = sm_name_to_type((const char *)c->name);
-		if ((int)ct < 0) {
-			/* Forgiving: ignore unknown elements in containers. */
-			continue;
-		}
-		struct sm_node *child = sm_from_xml_node(c);
-		if (!child) {
-			continue;
-		}
-		if (!sm_node_add_child(node, child)) {
-			sm_node_free(child);
-			sm_node_free(node);
-			return NULL;
-		}
-	}
-
 	return node;
-}
-
-static struct sm_node *sm_parse_layout(const char *xml)
-{
-	if (string_null_or_empty(xml)) {
-		return NULL;
-	}
-
-	xmlDocPtr doc = xmlReadMemory(
-		xml,
-		(int)strlen(xml),
-		"startmenu_layout.xml",
-		NULL,
-		XML_PARSE_NONET | XML_PARSE_NOERROR | XML_PARSE_NOWARNING | XML_PARSE_NOBLANKS
-	);
-	if (!doc) {
-		return NULL;
-	}
-
-	xmlNode *root = xmlDocGetRootElement(doc);
-	if (!root || root->type != XML_ELEMENT_NODE) {
-		xmlFreeDoc(doc);
-		return NULL;
-	}
-	enum sm_node_type root_type = sm_name_to_type((const char *)root->name);
-	if (root_type != SM_NODE_VBOX && root_type != SM_NODE_HBOX) {
-		xmlFreeDoc(doc);
-		return NULL;
-	}
-
-	struct sm_node *out = sm_from_xml_node(root);
-	xmlFreeDoc(doc);
-	return out;
 }
 
 static void sm_measure(struct startmenu *menu, const struct sm_node *n,
@@ -1115,6 +1023,15 @@ plugin_startmenu_update(struct panel *panel)
 	}
 }
 
+static void
+init_layout(struct startmenu *menu)
+{
+	menu->ui_root = add_node(SM_NODE_VBOX);
+
+	sm_node_add_child(menu->ui_root, add_node(SM_NODE_SEARCH));
+	sm_node_add_child(menu->ui_root, add_node(SM_NODE_APPLIST));
+}
+
 void
 plugin_startmenu_create(struct panel *panel)
 {
@@ -1136,15 +1053,8 @@ plugin_startmenu_create(struct panel *panel)
 	};
 	wl_list_insert(panel->widgets.prev, &menu->base.link);
 
-	/* Default layout: search box above scrollable app list. */
-	const char *layout_xml = panel->conf && panel->conf->startmenu_layout
-		? panel->conf->startmenu_layout
-		: "<vbox><search/><applist/></vbox>";
-	menu->ui_root = sm_parse_layout(layout_xml);
-	if (!menu->ui_root) {
-		warn("startmenu: failed to parse startmenu_layout, falling back");
-		menu->ui_root = sm_parse_layout("<vbox><search/><applist/></vbox>");
-	}
+	// Could have several of these for different styles
+	init_layout(menu);
 
 	load_apps(menu);
 }
