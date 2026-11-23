@@ -60,7 +60,10 @@ toplevel_update_surface(struct toplevel *toplevel)
 
 	/* Add icon */
 	int ICON_SIZE = 22;
+	cairo_save(cairo);
+	cairo_translate(cairo, 0, (box.height - ICON_SIZE) / 2.0);
 	desktop_entry_load_icon_from_app_id(cairo, panel, toplevel->app_id, ICON_SIZE, 1.0);
+	cairo_restore(cairo);
 
 	/* Draw text */
 	cairo_set_source_u32(cairo, panel->conf->text);

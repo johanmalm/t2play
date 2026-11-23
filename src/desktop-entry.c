@@ -286,7 +286,6 @@ get_desktop_entry(struct sfdo *sfdo, const char *app_id)
 static void
 add_png(cairo_t *cairo, struct panel *panel, const char *filename, int icon_size)
 {
-	cairo_save(cairo);
 	cairo_surface_t *image = cairo_image_surface_create_from_png(filename);
 	if (cairo_surface_status(image)) {
 		cairo_surface_destroy(image);
@@ -294,13 +293,14 @@ add_png(cairo_t *cairo, struct panel *panel, const char *filename, int icon_size
 		return;
 	}
 
-	cairo_translate(cairo, panel->conf->task_padding, 0);
-
 	/* TODO: use cairo_image_surface_scale() */
 	double w, h, max;
 	w = cairo_image_surface_get_width(image);
 	h = cairo_image_surface_get_height(image);
 	max = h > w ? h : w;
+	cairo_save(cairo);
+	cairo_translate(cairo, panel->conf->task_padding,
+		(icon_size - h * icon_size / max) / 2.0);
 	if (max != icon_size) {
 		cairo_scale(cairo, icon_size / max, icon_size / max);
 	}
@@ -345,7 +345,7 @@ desktop_entry_load_icon(cairo_t *cairo, struct panel *panel, const char *icon_na
 
 	debug("loading icon file %s", ctx.path);
 	if (ctx.format == SFDO_ICON_FILE_FORMAT_PNG) {
-		add_png(cairo, panel, ctx.path, 22);
+		add_png(cairo, panel, ctx.path, size);
 	}
 	// TODO: Handle SVG too
 
