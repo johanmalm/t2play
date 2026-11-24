@@ -172,6 +172,7 @@ struct pointer {
 	int y;
 	uint32_t button_serial;
 	struct wl_surface *focus_surface;
+	struct toplevel *hovered_toplevel;
 };
 
 struct seat {
@@ -276,6 +277,7 @@ void plugin_taskbar_init(struct panel *panel);
 void plugin_taskbar_create(struct panel *panel);
 void toplevel_destroy(struct toplevel *toplevel);
 struct toplevel *toplevel_from_widget(struct widget *widget);
+bool toplevel_set_pointer_hover(struct seat *seat, struct toplevel *toplevel);
 
 void plugin_clock_update(struct panel *panel);
 void plugin_clock_create(struct panel *panel);

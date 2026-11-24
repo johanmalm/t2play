@@ -148,6 +148,8 @@ render_panel(cairo_t *cairo, struct panel *panel)
 	cairo_restore(cairo);
 }
 
+static struct toplevel *toplevel_at_pointer(struct seat *seat);
+
 void
 render_frame(struct panel *panel)
 {
@@ -165,6 +167,12 @@ render_frame(struct panel *panel)
 	cairo_restore(cairo);
 
 	update_widget_positions(panel);
+	struct seat *seat;
+	wl_list_for_each(seat, &panel->seats, link) {
+		if (seat->pointer.focus_surface == panel->surface) {
+			toplevel_set_pointer_hover(seat, toplevel_at_pointer(seat));
+		}
+	}
 	render_panel(cairo, panel);
 
 	panel->current_buffer = get_next_buffer(panel->shm, panel->buffers,
@@ -197,6 +205,9 @@ cleanup:
 static void
 seat_destroy(struct seat *seat)
 {
+	struct panel *panel = seat->panel;
+	bool hover_changed = panel->run_display
+		&& toplevel_set_pointer_hover(seat, NULL);
 	if (seat->pointer.cursor_theme) {
 		wl_cursor_theme_destroy(seat->pointer.cursor_theme);
 	}
@@ -219,6 +230,9 @@ seat_destroy(struct seat *seat)
 	wl_seat_destroy(seat->wl_seat);
 	wl_list_remove(&seat->link);
 	zfree(seat);
+	if (hover_changed) {
+		render_frame(panel);
+	}
 }
 
 static void
@@ -411,6 +425,20 @@ update_all_cursors(struct panel *panel)
 	}
 }
 
+static struct toplevel *
+toplevel_at_pointer(struct seat *seat)
+{
+	struct widget *widget;
+	wl_list_for_each_reverse(widget, &seat->panel->widgets, link) {
+		if (widget->type == WIDGET_TOPLEVEL
+				&& box_contains_point(&widget->box,
+					seat->pointer.x, seat->pointer.y)) {
+			return toplevel_from_widget(widget);
+		}
+	}
+	return NULL;
+}
+
 static void
 wl_pointer_enter(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 	struct wl_surface *surface, wl_fixed_t surface_x, wl_fixed_t surface_y)
@@ -433,6 +461,10 @@ wl_pointer_enter(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 		pointer->serial = serial;
 		update_cursor(seat);
 	}
+	if (surface == seat->panel->surface
+			&& toplevel_set_pointer_hover(seat, toplevel_at_pointer(seat))) {
+		render_frame(seat->panel);
+	}
 }
 
 static void
@@ -441,6 +473,8 @@ wl_pointer_leave(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 {
 	struct seat *seat = data;
 	struct panel *panel = seat->panel;
+	bool hover_changed = surface == panel->surface
+		&& toplevel_set_pointer_hover(seat, NULL);
 	if (panel->open_popup
 		&& surface == panel->open_popup->popup_surface) {
 		plugin_startmenu_pointer_leave(panel->open_popup);
@@ -454,6 +488,9 @@ wl_pointer_leave(void *data, struct wl_pointer *wl_pointer, uint32_t serial,
 		thumbnail_hide(panel);
 	}
 	seat->pointer.focus_surface = NULL;
+	if (hover_changed) {
+		render_frame(panel);
+	}
 }
 
 static void
@@ -475,16 +512,8 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer, uint32_t time,
 
 	/* Detect hover over taskbar toplevel buttons */
 	if (seat->pointer.focus_surface == panel->surface) {
-		struct toplevel *hovered = NULL;
-		struct widget *widget;
-		wl_list_for_each_reverse(widget, &panel->widgets, link) {
-			if (widget->type == WIDGET_TOPLEVEL
-					&& box_contains_point(&widget->box,
-						seat->pointer.x, seat->pointer.y)) {
-				hovered = toplevel_from_widget(widget);
-				break;
-			}
-		}
+		struct toplevel *hovered = toplevel_at_pointer(seat);
+		bool hover_changed = toplevel_set_pointer_hover(seat, hovered);
 		if (hovered != panel->hovered_toplevel) {
 			panel->hovered_toplevel = hovered;
 			if (hovered) {
@@ -492,6 +521,9 @@ wl_pointer_motion(void *data, struct wl_pointer *wl_pointer, uint32_t time,
 			} else {
 				thumbnail_hide(panel);
 			}
+		}
+		if (hover_changed) {
+			render_frame(panel);
 		}
 	}
 }
@@ -705,13 +737,16 @@ seat_handle_capabilities(void *data, struct wl_seat *wl_seat,
 {
 	struct seat *seat = data;
 	bool cap_pointer = caps & WL_SEAT_CAPABILITY_POINTER;
+	bool hover_changed = false;
 	if (cap_pointer && !seat->pointer.pointer) {
 		seat->pointer.pointer = wl_seat_get_pointer(wl_seat);
 		wl_pointer_add_listener(seat->pointer.pointer,
 			&pointer_listener, seat);
 	} else if (!cap_pointer && seat->pointer.pointer) {
+		hover_changed = toplevel_set_pointer_hover(seat, NULL);
 		wl_pointer_destroy(seat->pointer.pointer);
 		seat->pointer.pointer = NULL;
+		seat->pointer.focus_surface = NULL;
 	}
 	bool cap_keyboard = caps & WL_SEAT_CAPABILITY_KEYBOARD;
 	if (cap_keyboard && !seat->keyboard) {
@@ -721,6 +756,9 @@ seat_handle_capabilities(void *data, struct wl_seat *wl_seat,
 	} else if (!cap_keyboard && seat->keyboard) {
 		wl_keyboard_destroy(seat->keyboard);
 		seat->keyboard = NULL;
+	}
+	if (hover_changed) {
+		render_frame(seat->panel);
 	}
 }
 

@@ -78,6 +78,12 @@ process_line(struct conf *conf, char *line)
 		conf->task_background_color = parse_hex(value);
 	} else if (!strcmp(key, "task_active_background_color")) {
 		conf->task_active_background_color = parse_hex(value);
+	} else if (!strcmp(key, "task_background_color_hover")) {
+		conf->task_background_color_hover = parse_hex(value);
+		conf->task_background_color_hover_set = true;
+	} else if (!strcmp(key, "task_active_background_color_hover")) {
+		conf->task_active_background_color_hover = parse_hex(value);
+		conf->task_active_background_color_hover_set = true;
 
 	/* panel */
 	} else if (!strcmp(key, "panel_items")) {
@@ -201,6 +207,8 @@ conf_init(struct conf *conf)
 	conf->text = 0xFFFFFFFF;
 	conf->task_background_color = 0x4A4A4AFF;
 	conf->task_active_background_color = 0x5A8AC6FF;
+	conf->task_background_color_hover_set = false;
+	conf->task_active_background_color_hover_set = false;
 
 	conf->panel_items = xstrdup("STBKC");
 	conf->panel_breadth = 40;

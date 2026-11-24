@@ -2,6 +2,7 @@
 #ifndef CONF_H
 #define CONF_H
 #include <pango/pangocairo.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 struct conf {
@@ -15,6 +16,10 @@ struct conf {
 	uint32_t text;
 	uint32_t task_background_color;
 	uint32_t task_active_background_color;
+	uint32_t task_background_color_hover;
+	uint32_t task_active_background_color_hover;
+	bool task_background_color_hover_set;
+	bool task_active_background_color_hover_set;
 
 	/* panel */
 	char *panel_items;

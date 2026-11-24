@@ -100,6 +100,14 @@ taskbar.
 *task_active_background_color = <color>*
 	Background color for selected tasks.
 
+*task_background_color_hover = <color>*
+	Background color for non-selected tasks under the pointer. Defaults to
+	*task_background_color* when unset.
+
+*task_active_background_color_hover = <color>*
+	Background color for selected tasks under the pointer. Defaults to
+	*task_active_background_color* when unset.
+
 ## Startmenu
 
 *startmenu_padding = <integer>*

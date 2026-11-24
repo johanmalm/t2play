@@ -50,10 +50,22 @@ toplevel_update_surface(struct toplevel *toplevel)
 	/* Draw background */
 	cairo_save(cairo);
 	rounded_rect(cairo, box.width, box.height, 6);
+	bool hovered = false;
+	struct seat *seat;
+	wl_list_for_each(seat, &panel->seats, link) {
+		if (seat->pointer.hovered_toplevel == toplevel) {
+			hovered = true;
+			break;
+		}
+	}
 	if (toplevel->active) {
-		cairo_set_source_u32(cairo, panel->conf->task_active_background_color);
+		cairo_set_source_u32(cairo, hovered && panel->conf->task_active_background_color_hover_set
+			? panel->conf->task_active_background_color_hover
+			: panel->conf->task_active_background_color);
 	} else {
-		cairo_set_source_u32(cairo, panel->conf->task_background_color);
+		cairo_set_source_u32(cairo, hovered && panel->conf->task_background_color_hover_set
+			? panel->conf->task_background_color_hover
+			: panel->conf->task_background_color);
 	}
 	cairo_fill(cairo);
 	cairo_restore(cairo);
@@ -70,6 +82,23 @@ toplevel_update_surface(struct toplevel *toplevel)
 	cairo_move_to(cairo, ICON_SIZE + 2 * padding, (box.height - rect.height) / 2.0);
 	render_text(cairo, panel->conf->font_description, 1, false, "%s", label);
 	cairo_destroy(cairo);
+}
+
+bool
+toplevel_set_pointer_hover(struct seat *seat, struct toplevel *toplevel)
+{
+	struct toplevel *previous = seat->pointer.hovered_toplevel;
+	if (previous == toplevel) {
+		return false;
+	}
+	seat->pointer.hovered_toplevel = toplevel;
+	if (previous) {
+		toplevel_update_surface(previous);
+	}
+	if (toplevel) {
+		toplevel_update_surface(toplevel);
+	}
+	return true;
 }
 
 struct toplevel *
@@ -94,6 +123,17 @@ static const struct widget_impl toplevel_widget_impl = {
 void
 toplevel_destroy(struct toplevel *toplevel)
 {
+	struct panel *panel = toplevel->base.panel;
+	struct seat *seat;
+	wl_list_for_each(seat, &panel->seats, link) {
+		if (seat->pointer.hovered_toplevel == toplevel) {
+			seat->pointer.hovered_toplevel = NULL;
+		}
+	}
+	if (panel->hovered_toplevel == toplevel) {
+		panel->hovered_toplevel = NULL;
+		thumbnail_hide(panel);
+	}
 	wl_list_remove(&toplevel->base.link);
 	zwlr_foreign_toplevel_handle_v1_destroy(toplevel->handle);
 	zfree(toplevel->title);

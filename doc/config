@@ -10,6 +10,8 @@ taskbar_spacing = 6
 task_padding = 8
 task_background_color = #4A4A4AFF
 task_active_background_color = #5A8AC6FF
+# task_background_color_hover = #5A5A5AFF
+# task_active_background_color_hover = #6A9AD6FF
 
 startmenu_padding = 8
 
